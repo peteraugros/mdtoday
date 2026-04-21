@@ -519,8 +519,9 @@ mdtoday/
 ├── sw.js                   ← Service worker (cache strategy)
 ├── manifest.json           ← PWA manifest (icons, theme color, name)
 ├── icons/
-│   └── apple-touch-icon.png   ← 180×180, grabbed from materdei.org 2026-04-20
-│                              ← icon-192.png and icon-512.png not yet created
+│   ├── apple-touch-icon.png   ← 180×180 Monarch, from materdei.org 2026-04-20. Used as favicon and iOS touch icon.
+│   └── md-wordmark.png        ← Mater Dei interlocking-MD wordmark (red on transparent). Used in page header + splash. User-supplied 2026-04-20.
+│                              ← icon-192.png and icon-512.png not yet created (manifest icons array is empty)
 └── README.md               ← How to update the sheet, update the iCal URL, deploy
 ```
 
@@ -710,6 +711,18 @@ Two things this module handles that no other module does:
 
 2. **Weekend-bridged grouping.** Consecutive dates with identical SUMMARY merge into one range. A Sat/Sun-only gap (e.g., Christmas Break where the feed lists Dec 22–26 Mon–Fri, skips Sat/Sun, then resumes Mon) is bridged: the group extends across the weekend and the rendered range is `Dec 22 – Jan 2 · 12 days`. A gap including any weekday breaks the group. See the audit-verified test cases in the Phase 5 implementation notes.
 
+### Splash + bottom navbar — inline, no JS module
+
+The brand-pass refactor (2026-04-20) added a session-scoped splash screen and a fixed bottom navbar to all three views. Neither has a dedicated JS module:
+
+- **Bottom navbar** is pure HTML+CSS. Three `<a>` tags with inline SVG icons. Active state is set per-HTML-file via the `is-active` class on the matching `<a>` — no JavaScript needed for highlighting. Identical markup in `index.html`, `schedule.html`, `daysoff.html` except for which link carries `is-active` and `aria-current="page"`. This is duplication-by-design — a shared partial would require either a build step (rejected by the spec) or runtime JS to inject the navbar (more code surface than the duplication itself). If the navbar gains a fourth view, this triplication becomes quadruplication; revisit then.
+
+- **Splash gating + dismissal** are two small inline `<script>` tags per HTML file:
+  1. **Gate script** lives in `<head>`, runs synchronously before `<body>` parses. Reads `sessionStorage.getItem('mdtoday-splash-shown')` and sets a `splash-skip` class on `<html>` if already shown this session. The class is read by CSS to skip the splash entirely with `display: none`. SessionStorage exceptions (private browsing) fall through to the same skip-path so the splash never hangs.
+  2. **Dismissal script** lives as the last `<script>` in `<body>`. After 1600ms hold, adds `is-dismissed` to the splash element (CSS handles the 400ms opacity fade). Tap-anywhere also triggers immediate dismissal. After fade completes, `splash.remove()` takes it out of the DOM entirely so it never intercepts taps post-dismissal.
+- **Splash and view rendering run in parallel.** The splash is `position: fixed; z-index: 100`. Module scripts (`app.js` / `schedule-view.js` / `daysoff-view.js`) execute normally during the splash; by the time the splash fades, the underlying view is already populated. The splash never gates data fetching.
+- **Why inline rather than a `splash.js` module:** the gate must run blocking-synchronous in `<head>` before `<body>` parses, otherwise a frame of splash content can flash before the JS tells it to skip. Module scripts are deferred by default, which would defeat that requirement. The dismissal script is small enough that an inline tag is cleaner than a one-purpose JS module. If a future refactor extracts to `splash.js`, the gate must remain in `<head>` as a non-module script with `defer` and `async` both off.
+
 ---
 
 ## The `announcement_text` Rule (non-negotiable)
@@ -781,6 +794,20 @@ Trust states map to color but must also differ in layout or iconography so color
 - Base font size 18px (readable on a phone at arm's length in a classroom)
 - Primary touch targets minimum 48×48px (thumb-friendly)
 - Max content width 480px (phone-first; looks fine on desktop but not optimized for it)
+
+### Brand & Navigation (added 2026-04-20)
+
+**Header logo.** All three views display the Mater Dei interlocking-MD wordmark (`icons/md-wordmark.png`) to the left of the "MD Today" page title. ~28px tall, decorative (`alt=""`, `aria-hidden`) because the text already conveys meaning to assistive tech.
+
+**Favicon.** Browser tab uses `icons/apple-touch-icon.png` (the Monarch). Square, downscales cleanly.
+
+**Bottom navbar.** Fixed-position bar at the bottom of every view. Three icon-only links (Now / Schedule / Days off) with inline SVG icons. Active view's icon is `--md-red`; inactive icons are `--md-gray-text-muted`. Replaces the previous footer text-link pattern, which was easy to miss on long views (the Days Off list pushed the footer off-screen). Navbar item labels are `sr-only` for assistive tech only — visible-text labels were rejected as visual noise.
+
+**Splash screen.** Once-per-session brand moment. Shows the MD wordmark with a heartbeat-pulse animation (`scale 1 → 1.06 → 1 → 1.04 → 1` over 900ms, infinite) and the "Honor · Glory · Love" tagline in red small caps. Visible 1600ms, then fades 400ms (2000ms total). Tap-anywhere dismisses immediately. Subsequent navigation within the same browser session skips the splash entirely (sessionStorage flag). Reduced-motion users get a still logo with no scale animation.
+
+**The splash is a deliberate trade-off against the time-to-decision invariant.** The product spec optimizes for cognitive compression per second of attention, with a 1.5-second glance-test target. The splash adds 2 seconds to first-of-session load. This is justified for one reason: the cold-launch case is a context where the student is opening the app intentionally, has already committed to a multi-second interaction, and benefits from a brand-identity moment that makes the app feel like a Mater Dei product rather than a generic schedule viewer. The session-scoped gate ensures it does NOT add 2 seconds to the in-hallway "tap-to-check" case — subsequent loads are instant. Tap-to-skip respects the rare student who needs information immediately even on first load. Reduced-motion respects accessibility.
+
+If real-student feedback indicates the splash interferes with the time-to-decision invariant — even on cold load — the right fix is to either (a) shorten it (e.g., to 1s), (b) make it skippable per-device permanently via a settings toggle, or (c) move it to a one-time "first run" experience using localStorage instead of sessionStorage. Do not silently tune duration in production without recording the change here.
 
 ---
 
@@ -920,6 +947,38 @@ These emerged during implementation and are worth logging so future sessions kno
 - **Two new v1.1 candidates surfaced:**
   1. **Partial-grade-closure labels read as full-school closures.** "No School Grades 9-11" and "No School Grade 12" appear as plain rows with no indication that some students are still in school. A grade-12 student looking at the Days Off list on May 26 would see "No School Grades 9-11" and have to mentally check whether that includes them. Same class of issue as the upper/lower lunch-track asymmetry — the spec rejects per-student identity, so the honest fix is probably a clarifying label tweak rather than a filter.
   2. **Days Off list gets long fast.** Dec 1 synthetic showed 9+ entries through end of year. Scrollable, but a student scanning quickly wants the *next* day-off prominent. A "Next day off: X" callout at the top of the list (mirroring the Now view's temporal region but for the future) would help once real-student feedback confirms it's worth doing.
+
+### Brand pass — header logo, navbar, splash (post-Phase-5, 2026-04-20)
+
+After Phase 5 shipped, did a brand+UX refactor across all three views. Not numbered as a new phase because it's polish, not new functionality — but substantial enough to record.
+
+**What changed:**
+- Added Mater Dei MD wordmark (`icons/md-wordmark.png`) to the page header in all three views
+- Added favicon link (`apple-touch-icon.png`) to all three views
+- Removed the footer text-link navigation pattern entirely (`<footer class="page-footer">` + `.page-footer` CSS rules deleted)
+- Added a fixed bottom navbar (Now / Schedule / Days off) with inline SVG icons, active state per-view via `is-active` class
+- Moved the version string from footer to a small line under the page header
+- Added a session-scoped splash screen (heartbeat-pulse animation on the wordmark, "Honor · Glory · Love" tagline, 2s total, tap-to-skip, sessionStorage-gated)
+- Bumped SW cache `mdtoday-v1.0.1 → mdtoday-v1.0.2`, added two icon files to PRECACHE_URLS (now 15 entries)
+
+**What did NOT change:**
+- No JS module touched
+- Trust-state visual language preserved
+- Three-layer model preserved
+- Data flow preserved
+- iPad-specific layout deliberately deferred (separate ticket)
+- iOS-native PWA splash image deliberately deferred (separate Phase-4-residual ticket)
+
+**Notable decisions, recorded for future-me:**
+- **The splash adds ~2s to first-of-session load.** This conflicts with the time-to-decision invariant (`claude.md` line 102). The product owner weighed the trade-off and chose to ship the splash for cold-load brand identity, accepting the cost on the assumption that subsequent navigation (which dominates the in-hallway use case) is unaffected by sessionStorage gating. See "Brand & Navigation" in the Design System section for the full reasoning and the conditions under which to revisit.
+- **Cache bump v1.0.1 → v1.0.2 happened correctly.** Second consecutive session to exercise the bump-discipline pattern. Two new files precached (the icons), version string in `.page-version` updated in lockstep across all three HTMLs, sw.js CACHE_NAME flipped. Mechanism still works.
+- **Bottom navbar markup is triplicated across HTML files.** The `is-active` class moves between `<a>` tags by file. This is duplication-by-design — the alternative (build step or runtime JS injection) violates the "no build step, no framework" architectural commitment. If a fourth view is ever added, the triplication becomes quadruplication; that's the trigger to reconsider.
+
+**v1.1 candidates surfaced or made more concrete:**
+- **iPad-optimized layout.** Currently phone-first with `--content-max: 480px`. Works on iPad but doesn't take advantage of the larger viewport. Real ticket once iPad student usage is observed.
+- **Settings/About page.** No place currently for school-identity content beyond the splash and header. An About page would also give the splash an "off switch" (localStorage toggle) for students who find the brand moment annoying after the first few days.
+- **iOS-native PWA splash image** (separate from the in-app splash). Currently a PWA cold launch from home screen shows a white screen until the HTML parses; a proper `<link rel="apple-touch-startup-image">` set would brand that gap. Real ticket, blocked on generating a per-device-size image set.
+- **Splash skip toggle** in a future settings page so students can disable the brand moment entirely if it becomes annoying after first-week novelty wears off.
 
 ### Phase 6: Deploy
 

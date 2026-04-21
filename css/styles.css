@@ -61,7 +61,7 @@
     background: var(--md-gray-bg);
     line-height: 1.4;
     min-height: 100vh;
-    padding: var(--spacing-md);
+    padding: var(--spacing-md) var(--spacing-md) calc(var(--spacing-xl) + 64px + env(safe-area-inset-bottom));
   }
   
   /* ---------------------------------------------------------------------------
@@ -83,10 +83,19 @@
   }
   
   .page-header__brand {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
     font-size: 1.25rem;
     font-weight: 700;
     color: var(--md-red);
     letter-spacing: -0.01em;
+  }
+
+  .page-header__logo {
+    height: 28px;
+    width: auto;  /* preserve aspect ratio — wordmark is wider than tall */
+    display: block;
   }
   
   .page-header__date {
@@ -269,21 +278,16 @@
   }
   
   /* ---------------------------------------------------------------------------
-     Footer
+     Version string (under header)
      ------------------------------------------------------------------------- */
-  
-  .page-footer {
-    margin-top: var(--spacing-xl);
-    padding-top: var(--spacing-md);
-    border-top: 1px solid var(--md-gray-border);
-    font-size: 0.75rem;
+
+  .page-version {
+    text-align: right;
+    font-size: 0.6875rem;
     color: var(--md-gray-text-muted);
-    text-align: center;
-  }
-  
-  .page-footer a {
-    color: inherit;
-    text-decoration: none;
+    margin-top: calc(-1 * var(--spacing-md));
+    margin-bottom: var(--spacing-md);
+    opacity: 0.6;
   }
 
   /* ---------------------------------------------------------------------------
@@ -369,12 +373,6 @@
     width: 1%;
   }
 
-  /* Footer variant on multi-view pages — links stack above the version text */
-  .page-footer a {
-    display: block;
-    margin-bottom: var(--spacing-xs);
-  }
-
   /* ---------------------------------------------------------------------------
      Days Off view
      ---------------------------------------------------------------------------
@@ -436,3 +434,137 @@
     color: var(--md-gray-text-muted);
     font-variant-numeric: tabular-nums;
   }
+
+/* ---------------------------------------------------------------------------
+   Bottom navigation
+   ---------------------------------------------------------------------------
+   Fixed bottom tab bar. Three icon-only links. Replaces the previous footer
+   text links. Active state set per-HTML-file via `is-active` class.
+   ------------------------------------------------------------------------- */
+
+.bottomnav {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: space-around;
+  align-items: stretch;
+  background: var(--md-gray-surface);
+  border-top: 1px solid var(--md-gray-border);
+  box-shadow: 0 -1px 3px rgba(0, 0, 0, 0.04);
+  padding-bottom: env(safe-area-inset-bottom);
+  z-index: 10;
+}
+
+.bottomnav__item {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--touch-min);
+  padding: var(--spacing-sm) 0;
+  color: var(--md-gray-text-muted);
+  text-decoration: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.bottomnav__item.is-active {
+  color: var(--md-red);
+}
+
+.bottomnav__icon {
+  width: 26px;
+  height: 26px;
+  display: block;
+}
+
+/* Visually hide labels but keep for screen readers */
+.bottomnav__label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ---------------------------------------------------------------------------
+   Splash screen
+   ---------------------------------------------------------------------------
+   First-of-session brand moment. MD wordmark with a heartbeat pulse and
+   "Honor · Glory · Love" tagline. Fades to the rendered view after 2s, or
+   on tap. Skipped entirely on subsequent navigation within the session
+   (see inline script in HTML head).
+
+   Performance: data fetching in app.js / schedule-view.js / daysoff-view.js
+   runs in parallel with the splash — by the time the splash fades, the
+   underlying view is already rendered. The splash sits on top via z-index.
+   ------------------------------------------------------------------------- */
+
+.splash-skip .splash {
+  display: none;
+}
+
+.splash {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--md-gray-bg);
+  opacity: 1;
+  transition: opacity 380ms ease-out;
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+  cursor: pointer;
+}
+
+.splash.is-dismissed {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.splash__inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--spacing-lg);
+  user-select: none;
+}
+
+.splash__logo {
+  width: 60vw;
+  max-width: 320px;
+  height: auto;
+  display: block;
+  animation: splash-heartbeat 900ms ease-in-out infinite;
+  transform-origin: center;
+}
+
+@keyframes splash-heartbeat {
+  0%, 100% { transform: scale(1); }
+  20%      { transform: scale(1.06); }
+  40%      { transform: scale(1); }
+  60%      { transform: scale(1.04); }
+  80%      { transform: scale(1); }
+}
+
+.splash__tagline {
+  font-size: 0.875rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--md-red);
+  font-weight: 600;
+  text-align: center;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .splash__logo {
+    animation: none;
+  }
+}

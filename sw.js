@@ -20,7 +20,7 @@
 //   - Bump CACHE_NAME in lockstep with the footer version string in each HTML
 //     file. Manual discipline; a constants-file refactor is v2.
 
-const CACHE_NAME = 'mdtoday-v1.0.1';
+const CACHE_NAME = 'mdtoday-v1.0.2';
 
 // Files the app shell needs to render the Now view offline from a cold cache.
 // On install we precache these. Anything not listed here is cached lazily on
@@ -39,6 +39,8 @@ const PRECACHE_URLS = [
   './js/resolve.js',
   './js/schedule.js',
   './manifest.json',
+  './icons/apple-touch-icon.png',
+  './icons/md-wordmark.png',
 ];
 
 // ---------------------------------------------------------------------------
