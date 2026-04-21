@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#B71C1C">
+  <title>MD Today — Schedule</title>
+  <link rel="stylesheet" href="./css/styles.css">
+</head>
+<body>
+  <div class="page">
+
+    <header class="page-header">
+      <div class="page-header__brand">MD Today</div>
+      <div class="page-header__date" id="header-date">—</div>
+    </header>
+
+    <main class="schedule" id="schedule">
+
+      <!-- Validity region — trust state banner (reused from Now view) -->
+      <section class="validity" id="validity" aria-live="polite">
+        <div class="validity__icon" id="validity-icon" aria-hidden="true"></div>
+        <div class="validity__body">
+          <div class="validity__title" id="validity-title"></div>
+          <div class="validity__detail" id="validity-detail"></div>
+        </div>
+      </section>
+
+      <!-- Schedule card -->
+      <section class="schedule-card" id="schedule-card">
+        <div class="schedule-card__day-label" id="day-label">Loading…</div>
+
+        <!-- Empty state (shown when no table to render) -->
+        <div class="schedule-empty" id="schedule-empty" hidden>
+          <div class="schedule-empty__text" id="schedule-empty-text"></div>
+        </div>
+
+        <!-- Schedule table -->
+        <table class="schedule-table" id="schedule-table" hidden>
+          <thead>
+            <tr>
+              <th class="schedule-table__time">Time</th>
+              <th class="schedule-table__block">Block</th>
+              <th class="schedule-table__track">Track</th>
+            </tr>
+          </thead>
+          <tbody id="schedule-table-body"></tbody>
+        </table>
+      </section>
+
+    </main>
+
+    <footer class="page-footer">
+      <a href="./index.html">← Back to Now</a>
+      <div>MD Today · v1.0.0</div>
+    </footer>
+
+  </div>
+
+  <script type="module" src="./js/schedule-view.js"></script>
+</body>
+</html>
