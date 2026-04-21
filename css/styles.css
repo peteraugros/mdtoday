@@ -375,7 +375,7 @@
 
   @media (max-width: 400px) {
     .schedule-table__track {
-      font-size: 0.6875rem;
+      display: none;
     }
   }
 
