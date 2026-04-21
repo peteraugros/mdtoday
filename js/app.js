@@ -9,6 +9,7 @@
 import { loadData, isFresh } from './data.js';
 import { resolveDay } from './resolve.js';
 import { getCurrentStatus } from './schedule.js';
+import { startCountdown } from './countdown.js';
 
 // ---------------------------------------------------------------------------
 // DOM references
@@ -235,18 +236,23 @@ function showNext(nextBlock) {
 let currentPayload = null;
 let currentResolved = null;
 
-function renderAll() {
-  const now = new Date();
+// Stable render — runs once per data load. Paints validity, deviation, and
+// the header date. Does NOT paint the temporal region (tickTemporal owns that).
+function renderStable(now) {
   els.headerDate.textContent = DATE_FMT.format(now);
-
   currentResolved = resolveDay(currentPayload, now);
+  renderValidity(currentResolved, currentPayload);
+  renderDeviation(currentResolved);
+}
+
+// Temporal-only render — runs every second from countdown.js. Re-uses
+// currentResolved (set by renderStable); only recomputes status.
+function tickTemporal(now) {
+  if (!currentResolved) return;
   const status = currentResolved.template
     ? getCurrentStatus(currentResolved.template, now)
     : { status: 'after', currentBlock: null, currentTracks: null, nextBlock: null, secondsToNextTransition: null };
-
-  renderValidity(currentResolved, currentPayload);
   renderTemporal(currentResolved, status);
-  renderDeviation(currentResolved);
 }
 
 // ---------------------------------------------------------------------------
@@ -255,7 +261,20 @@ function renderAll() {
 
 async function boot() {
   currentPayload = await loadData();
-  renderAll();
+  const now = new Date();
+  renderStable(now);
+  tickTemporal(now);
+  startCountdown(tickTemporal, onLongResume);
+}
+
+// Long-resume (>1h tab hidden) — refresh data and re-run stable render, then
+// let countdown.js restart its interval via startCountdown.
+async function onLongResume() {
+  currentPayload = await loadData();
+  const now = new Date();
+  renderStable(now);
+  tickTemporal(now);
+  startCountdown(tickTemporal, onLongResume);
 }
 
 boot();
