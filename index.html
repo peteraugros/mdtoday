@@ -9,18 +9,37 @@
   <p>MD Today — dev shell. Open DevTools console.</p>
 
   <script type="module">
-    // Verify library imports succeed before we build anything on top.
     import * as data from './js/data.js';
-    import Papa from 'https://cdn.jsdelivr.net/npm/papaparse@5.4.1/+esm';
-    import ICAL from 'https://cdn.jsdelivr.net/npm/ical.js@1.5.0/+esm';
-
-    console.log('[MD Today] data module loaded:', data);
-    console.log('[MD Today] PapaParse version:', Papa.RECORD_SEP ? 'loaded' : 'FAILED');
-    console.log('[MD Today] ical.js loaded:', typeof ICAL);
-    console.log('[MD Today] ICAL_URL:', data.ICAL_URL);
-    console.log('[MD Today] FRESHNESS_HORIZON_MS:', data.FRESHNESS_HORIZON_MS);
-    console.log('[MD Today] isFresh(now):', data.isFresh(new Date().toISOString()));
-    console.log('[MD Today] isFresh(yesterday):', data.isFresh(new Date(Date.now() - 24*60*60*1000).toISOString()));
+  
+    console.log('--- Sanitizer tests ---');
+  
+    // sanitizeSummary
+    console.log('trim:', JSON.stringify(data.sanitizeSummary('   RED: B. 1, 3, 5, 7   ')));
+    console.log('collapse:', JSON.stringify(data.sanitizeSummary('RED:  B.   1,  3,  5,  7')));
+    console.log('empty:', JSON.stringify(data.sanitizeSummary('')));
+    console.log('non-string:', JSON.stringify(data.sanitizeSummary(null)));
+  
+    // sanitizeTime
+    console.log('short:', data.sanitizeTime('8:00'));           // "08:00"
+    console.log('long:', data.sanitizeTime('08:00'));           // "08:00"
+    console.log('pm:', data.sanitizeTime('1:30 PM'));           // "13:30"
+    console.log('am midnight:', data.sanitizeTime('12:00 AM')); // "00:00"
+    console.log('pm noon:', data.sanitizeTime('12:00 PM'));     // "12:00"
+    console.log('garbage:', data.sanitizeTime('not a time'));   // null
+    console.log('bad hour:', data.sanitizeTime('25:00'));       // null
+  
+    // sanitizeTemplatesRows
+    console.log('template rows:', data.sanitizeTemplatesRows([
+      { template_id: ' RED_REGULAR ', block_order: '1', block_name: ' Block 1 ', start_time: '8:00', end_time: '9:15', track: '' },
+      { template_id: 'red_regular', block_order: '3', block_name: 'Upper Lunch', start_time: '10:50', end_time: '11:30', track: 'UPPER' },
+      { template_id: '', block_order: '', block_name: '', start_time: '', end_time: '', track: '' }, // should be dropped
+    ]));
+  
+    // sanitizeSummaryMapRows
+    console.log('summary map rows:', data.sanitizeSummaryMapRows([
+      { calendar_summary: '  RED: B. 1, 3, 5, 7  ', template_id: ' RED_REGULAR ' },
+      { calendar_summary: '', template_id: '' }, // should be dropped
+    ]));
   </script>
 </body>
 </html>
