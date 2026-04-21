@@ -28,7 +28,7 @@ import ICAL from 'https://cdn.jsdelivr.net/npm/ical.js@1.5.0/+esm';
 //
 // NOTE: The iCal URL is year-scoped. Check each June whether Mater Dei has
 // rolled over to the next school year's calendar (id may change).
-export const ICAL_URL = 'https://corsproxy.io/?' + encodeURIComponent('https://www.materdei.org/apps/events/ical/?id=33');
+export const ICAL_URL = '/.netlify/functions/ical';
 
 
 export const TEMPLATES_CSV_URL =
