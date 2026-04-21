@@ -1,0 +1,287 @@
+/* ===========================================================================
+   MD Today — styles
+   ---------------------------------------------------------------------------
+   Mobile-first. System font stack. No framework.
+   Design tokens live in :root and drive everything downstream.
+   ========================================================================= */
+
+   :root {
+    /* --- Colors (see claude.md → Design System) --- */
+    --md-red: #B71C1C;
+    --md-white: #FFFFFF;
+    --md-gray-bg: #F5F5F5;
+    --md-gray-surface: #FFFFFF;
+    --md-gray-text: #212121;
+    --md-gray-text-muted: #616161;
+    --md-gray-border: #E0E0E0;
+    --md-accent: #1A237E;
+    --md-success: #2E7D32;
+    --md-warn: #F57F17;
+    --md-uncertain: #6A1B9A;
+    --md-offline: #424242;
+  
+    /* --- Trust state accent (dynamic — set by render.js) --- */
+    --trust-accent: transparent;
+  
+    /* --- Sizing --- */
+    --font-base: 18px;
+    --content-max: 480px;
+    --touch-min: 48px;
+    --radius: 12px;
+    --spacing-xs: 4px;
+    --spacing-sm: 8px;
+    --spacing-md: 16px;
+    --spacing-lg: 24px;
+    --spacing-xl: 32px;
+  
+    /* --- Typography --- */
+    --font-stack: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+                  "Helvetica Neue", Arial, sans-serif;
+  }
+  
+  /* ---------------------------------------------------------------------------
+     Reset + base
+     ------------------------------------------------------------------------- */
+  
+  *, *::before, *::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
+  
+  html {
+    font-size: var(--font-base);
+    -webkit-text-size-adjust: 100%;
+    -webkit-tap-highlight-color: transparent;
+  }
+  
+  body {
+    font-family: var(--font-stack);
+    color: var(--md-gray-text);
+    background: var(--md-gray-bg);
+    line-height: 1.4;
+    min-height: 100vh;
+    padding: var(--spacing-md);
+  }
+  
+  /* ---------------------------------------------------------------------------
+     Page layout
+     ------------------------------------------------------------------------- */
+  
+  .page {
+    max-width: var(--content-max);
+    margin: 0 auto;
+  }
+  
+  .page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    padding-bottom: var(--spacing-md);
+    border-bottom: 1px solid var(--md-gray-border);
+    margin-bottom: var(--spacing-lg);
+  }
+  
+  .page-header__brand {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--md-red);
+    letter-spacing: -0.01em;
+  }
+  
+  .page-header__date {
+    font-size: 0.875rem;
+    color: var(--md-gray-text-muted);
+  }
+  
+  /* ---------------------------------------------------------------------------
+     Three-layer Now view regions
+     ---------------------------------------------------------------------------
+     These three regions are independent DOM + render lifecycles.
+     See claude.md → "The three-layer model".
+     ------------------------------------------------------------------------- */
+  
+  .now {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-md);
+  }
+  
+  /* --- Validity region (trust state banner; hidden when Confirmed) --- */
+  
+  .validity {
+    display: none;                                /* hidden by default (Confirmed) */
+    padding: var(--spacing-md);
+    border-radius: var(--radius);
+    border-left: 4px solid var(--trust-accent);
+    background: var(--md-gray-surface);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  }
+  
+  .validity.is-visible {
+    display: flex;
+    gap: var(--spacing-md);
+    align-items: flex-start;
+  }
+  
+  .validity__icon {
+    font-size: 1.5rem;
+    line-height: 1;
+    flex-shrink: 0;
+  }
+  
+  .validity__body {
+    flex: 1;
+    min-width: 0;
+  }
+  
+  .validity__title {
+    font-weight: 700;
+    font-size: 1rem;
+    margin-bottom: 2px;
+  }
+  
+  .validity__detail {
+    font-size: 0.875rem;
+    color: var(--md-gray-text-muted);
+  }
+  
+  /* Trust state variants */
+  
+  .validity.is-stale      { --trust-accent: var(--md-warn); }
+  .validity.is-assumed    { --trust-accent: var(--md-uncertain); }
+  .validity.is-offline    { --trust-accent: var(--md-offline); }
+  
+  .validity.is-stale .validity__icon      { color: var(--md-warn); }
+  .validity.is-assumed .validity__icon    { color: var(--md-uncertain); }
+  .validity.is-offline .validity__icon    { color: var(--md-offline); }
+  
+  /* --- Temporal region (the main event: current period + countdown) --- */
+  
+  .temporal {
+    background: var(--md-gray-surface);
+    border-radius: var(--radius);
+    padding: var(--spacing-lg);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  }
+  
+  .temporal__day-label {
+    font-size: 0.875rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--md-gray-text-muted);
+    margin-bottom: var(--spacing-sm);
+  }
+  
+  .temporal__status {
+    font-size: 2rem;
+    font-weight: 700;
+    line-height: 1.1;
+    margin-bottom: var(--spacing-sm);
+  }
+  
+  .temporal__status--muted {
+    color: var(--md-gray-text-muted);
+    font-weight: 500;
+  }
+  
+  .temporal__countdown {
+    font-size: 1.25rem;
+    color: var(--md-gray-text-muted);
+    font-variant-numeric: tabular-nums;  /* stops the countdown from jittering */
+  }
+  
+  .temporal__next {
+    margin-top: var(--spacing-md);
+    padding-top: var(--spacing-md);
+    border-top: 1px solid var(--md-gray-border);
+    font-size: 0.9375rem;
+    color: var(--md-gray-text-muted);
+  }
+  
+  .temporal__next strong {
+    color: var(--md-gray-text);
+    font-weight: 600;
+  }
+  
+  /* Track-branching variant (lunch window) */
+  
+  .temporal--branched .temporal__tracks {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: var(--spacing-md);
+    margin-top: var(--spacing-sm);
+  }
+  
+  .track {
+    padding: var(--spacing-md);
+    border-radius: calc(var(--radius) - 4px);
+    background: var(--md-gray-bg);
+  }
+  
+  .track__label {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--md-gray-text-muted);
+    margin-bottom: 4px;
+  }
+  
+  .track__block {
+    font-size: 1.25rem;
+    font-weight: 600;
+  }
+  
+  .track__time {
+    font-size: 0.875rem;
+    color: var(--md-gray-text-muted);
+    font-variant-numeric: tabular-nums;
+    margin-top: 2px;
+  }
+  
+  /* --- Deviation region (announcement banner; hidden when empty) --- */
+  
+  .deviation {
+    display: none;
+    padding: var(--spacing-md);
+    border-radius: var(--radius);
+    background: var(--md-accent);
+    color: var(--md-white);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  }
+  
+  .deviation.is-visible {
+    display: flex;
+    gap: var(--spacing-md);
+    align-items: flex-start;
+  }
+  
+  .deviation__icon {
+    font-size: 1.25rem;
+    flex-shrink: 0;
+  }
+  
+  .deviation__text {
+    flex: 1;
+    font-size: 1rem;
+    font-weight: 500;
+    line-height: 1.3;
+  }
+  
+  /* ---------------------------------------------------------------------------
+     Footer
+     ------------------------------------------------------------------------- */
+  
+  .page-footer {
+    margin-top: var(--spacing-xl);
+    padding-top: var(--spacing-md);
+    border-top: 1px solid var(--md-gray-border);
+    font-size: 0.75rem;
+    color: var(--md-gray-text-muted);
+    text-align: center;
+  }
+  
+  .page-footer a {
+    color: inherit;
+    text-decoration: none;
+  }

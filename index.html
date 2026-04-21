@@ -2,69 +2,70 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#B71C1C">
   <title>MD Today</title>
+  <link rel="stylesheet" href="./css/styles.css">
 </head>
 <body>
-  <p>MD Today — dev shell. Open DevTools console.</p>
+  <div class="page">
 
-  <script type="module">
-    import * as data from './js/data.js';
-    import { resolveDay } from './js/resolve.js';
-    import { getCurrentStatus } from './js/schedule.js';
-  
-    console.log('--- Schedule test ---');
-  
-    const payload = await data.loadData();
-  
-    // Use a known Red Day (Tuesday 2025-08-26) for deterministic time tests
-    const redDayDate = '2025-08-26';
-    const resolvedRed = resolveDay(payload, new Date(`${redDayDate}T10:00:00`));
-    console.log('Using:', resolvedRed.dayLabel, '-', resolvedRed.templateId);
-    console.log('Template blocks:');
-    console.table(resolvedRed.template.blocks);
-  
-    // Helper to test at a specific wall-clock time
-    function at(hhmm) {
-      const [h, m] = hhmm.split(':').map(n => parseInt(n, 10));
-      const d = new Date(`${redDayDate}T00:00:00`);
-      d.setHours(h, m, 0, 0);
-      return d;
-    }
-  
-    function testAt(label, hhmm) {
-      const status = getCurrentStatus(resolvedRed.template, at(hhmm));
-      console.log(`\n[${hhmm} — ${label}]`);
-      console.log('  status:', status.status);
-      if (status.currentBlock) console.log('  currentBlock:', status.currentBlock.block_name, `(${status.currentBlock.start_time}-${status.currentBlock.end_time})`);
-      if (status.currentTracks) {
-        console.log('  currentTracks.upper:', status.currentTracks.upper.block_name, `(${status.currentTracks.upper.start_time}-${status.currentTracks.upper.end_time})`);
-        console.log('  currentTracks.lower:', status.currentTracks.lower.block_name, `(${status.currentTracks.lower.start_time}-${status.currentTracks.lower.end_time})`);
-      }
-      if (status.nextBlock) console.log('  nextBlock:', status.nextBlock.block_name, `(${status.nextBlock.start_time}-${status.nextBlock.end_time})`);
-      console.log('  secondsToNextTransition:', status.secondsToNextTransition);
-    }
-  
-    // Red Day bell schedule:
-    //   Block 1    08:00-09:15
-    //   Block 3    09:20-10:45
-    //   Block 5    10:50-12:05 (lower)  /  Upper Lunch 10:50-11:30
-    //   Upper Class 11:35-12:50 (upper) /  Lower Lunch 12:10-12:50
-    //   Block 7    12:55-14:10
-    //   Office Hr  14:20-15:00
-  
-    testAt('before school', '07:30');
-    testAt('in Block 1', '08:30');
-    testAt('passing period', '09:17');
-    testAt('in Block 3', '10:00');
-    testAt('passing to lunch window', '10:47');
-    testAt('lunch window early (upper eating, lower in class)', '11:00');
-    testAt('lunch window middle (upper back in class, lower still in class)', '11:45');
-    testAt('lunch window late (upper in class, lower at lunch)', '12:30');
-    testAt('in Block 7', '13:30');
-    testAt('passing to office hour', '14:15');
-    testAt('in Office Hour', '14:30');
-    testAt('after school', '15:30');
-  </script>
+    <header class="page-header">
+      <div class="page-header__brand">MD Today</div>
+      <div class="page-header__date" id="header-date">—</div>
+    </header>
+
+    <main class="now" id="now">
+
+      <!-- Validity region — trust state banner -->
+      <section class="validity" id="validity" aria-live="polite">
+        <div class="validity__icon" id="validity-icon" aria-hidden="true"></div>
+        <div class="validity__body">
+          <div class="validity__title" id="validity-title"></div>
+          <div class="validity__detail" id="validity-detail"></div>
+        </div>
+      </section>
+
+      <!-- Temporal region — current period + countdown -->
+      <section class="temporal" id="temporal" aria-live="polite">
+        <div class="temporal__day-label" id="day-label">Loading…</div>
+        <div class="temporal__status" id="status-text">—</div>
+        <div class="temporal__countdown" id="countdown-text"></div>
+
+        <!-- Track branching slot (shown only during lunch window) -->
+        <div class="temporal__tracks" id="tracks" hidden>
+          <div class="track track--upper">
+            <div class="track__label">Upper Lunch</div>
+            <div class="track__block" id="track-upper-block"></div>
+            <div class="track__time" id="track-upper-time"></div>
+          </div>
+          <div class="track track--lower">
+            <div class="track__label">Lower Lunch</div>
+            <div class="track__block" id="track-lower-block"></div>
+            <div class="track__time" id="track-lower-time"></div>
+          </div>
+        </div>
+
+        <div class="temporal__next" id="next-slot" hidden>
+          Next: <strong id="next-block-name"></strong>
+          <span id="next-block-time"></span>
+        </div>
+      </section>
+
+      <!-- Deviation region — announcement banner -->
+      <section class="deviation" id="deviation" aria-live="polite">
+        <div class="deviation__icon" aria-hidden="true">📣</div>
+        <div class="deviation__text" id="deviation-text"></div>
+      </section>
+
+    </main>
+
+    <footer class="page-footer">
+      MD Today · v1.0.0
+    </footer>
+
+  </div>
+
+  <script type="module" src="./js/app.js"></script>
 </body>
 </html>
