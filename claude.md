@@ -627,13 +627,42 @@ export function getCurrentStatus(template, now = new Date()) {
 ### `js/countdown.js` — Tick timer (temporal layer only)
 
 Responsibilities:
-- Re-render **only the temporal DOM region** every 1 second
-- Do NOT touch the validity or deviation DOM regions on tick
-- Handle tab visibility (pause when hidden, resync on focus)
-- On focus after long hiddenness (>1 hour), trigger a data refresh via `data.js`
-- Clean shutdown on navigation
+- Fire a caller-supplied tick function every 1 second with a fresh `Date`
+- Own no DOM — it is a pure time source. The caller (`app.js`) decides what to render and is responsible for only touching the temporal DOM region on tick.
+- Handle tab visibility: pause the interval when hidden, resume on visible
+- On resume after ≥1 hour hidden, fire an optional `onLongResume` callback **instead of** silently resuming the interval. The caller uses this to re-run `loadData` + `renderStable` + `tickTemporal` + `startCountdown`, because the cached payload may now be stale.
+- Clean shutdown on navigation via `stopCountdown()`
 
-This module is scoped to the temporal layer of the three-layer model. If it is re-rendering anything else, it is wrong.
+Constants (in the module, tunable by editing source):
+```js
+const TICK_MS = 1000;
+const LONG_RESUME_MS = 60 * 60 * 1000; // 1 hour
+```
+
+Contract:
+```js
+export function startCountdown(tickFn, onLongResume) {
+  // Starts a 1s interval. Fires tickFn(new Date()) once immediately, then every
+  // TICK_MS. Safe to call multiple times — replaces the previous tickFn and
+  // onLongResume, resets the interval. Attaches a visibilitychange listener
+  // once per module lifetime.
+  //
+  // If the tab is hidden at call time, does not start the interval; the
+  // visibility handler starts it on focus.
+  //
+  // tickFn:       required, called as tickFn(new Date())
+  // onLongResume: optional, called when tab becomes visible after ≥LONG_RESUME_MS
+  //               hidden. When this fires, the interval is NOT auto-resumed —
+  //               the caller must call startCountdown again.
+}
+
+export function stopCountdown() {
+  // Clears the interval, detaches the visibility listener, resets internal
+  // state. Call on teardown/navigation.
+}
+```
+
+This module is scoped to the temporal layer of the three-layer model. It has no knowledge of validity, deviation, `currentResolved`, or any schedule concept. If this module is importing from `data.js`, `resolve.js`, or `schedule.js`, it is wrong.
 
 ### `js/app.js` — View orchestration
 
@@ -781,10 +810,18 @@ These emerged during implementation and are worth logging so future sessions kno
 
 ### Phase 2 implementation notes
 
-- **Three DOM regions, not one.** `renderAll` calls `renderValidity` + `renderDeviation` once per data load (they're stable), then calls `tickTemporal` for the temporal region. The countdown tick only ever touches `tickTemporal`, never the other two — this is what keeps the page from flickering every second.
-- **Countdown is visibility-aware.** `countdown.js` listens for `visibilitychange` and pauses the tick when the tab is hidden (saves battery on backgrounded phones). When the tab returns after >1hr absence, it triggers a full data refresh + re-render, not just a tick resume, because the cached payload may now be stale.
+- **Three DOM regions, not one.** `app.js` has two entry points into rendering: `renderStable(now)` paints validity + deviation + the header date (once per data load, stable), and `tickTemporal(now)` paints only the temporal region (every second, from the countdown tick). The countdown tick only ever calls `tickTemporal`, never touches validity or deviation — this is what keeps the page from flickering every second.
+- **Countdown is visibility-aware.** `countdown.js` listens for `visibilitychange` and pauses the tick when the tab is hidden (saves battery on backgrounded phones). When the tab returns after <1h absence, the interval simply resumes. When it returns after ≥1h absence, `countdown.js` fires the `onLongResume` callback instead of silently resuming the tick — the caller (`app.js`) uses that to re-run `loadData` + `renderStable` + `tickTemporal` + `startCountdown` before resuming, because the cached payload may now be stale.
 - **`tickTemporal` re-uses `currentResolved` across ticks.** The expensive work (resolving the day, fetching data, running sanitizers) happened once at boot. The per-second tick only recomputes `getCurrentStatus` against the new `now` and re-renders the temporal region. One tick costs a few hundred microseconds — negligible.
-- **`currentResolved` is module-scoped.** `let currentResolved = null` at top of `app.js`. `renderAll` sets it; `tickTemporal` reads it; `boot`'s long-resume callback re-sets it via `loadData` → `renderAll`. Simple state flow, no observers, no framework.
+- **`currentResolved` is module-scoped.** `let currentResolved = null` at top of `app.js`. `renderStable` sets it; `tickTemporal` reads it; `onLongResume` re-sets it via `loadData` → `renderStable`. Simple state flow, no observers, no framework.
+- **`countdown.js` has no DOM access.** It's a pure time source exporting `startCountdown(tickFn, onLongResume?)` and `stopCountdown()`. The caller owns every rendering decision. This is what makes the tick safe to test in isolation and safe to restart from inside `onLongResume` without recursion worries.
+- **2026-04-20 correction — Phase 2 was marked complete prematurely.** `js/countdown.js` was an empty file; `app.js` called a single `renderAll()` once at boot and never ticked. The "visibility-aware countdown" described in the earlier implementation notes above was specification, not implementation. Fixed in this session by implementing `countdown.js` as described, splitting `renderAll` into `renderStable` + `tickTemporal` in `app.js`, and wiring `startCountdown(tickTemporal, onLongResume)` into `boot()`. Verified via synthetic-time testing across three cases on 2026-04-20:
+  - Red Mass Day at 08:15:33 — simple single-block case, countdown ticked, validity silent (Confirmed), deviation rendered "All School Mass" without flicker.
+  - Gray Pair-Late Day (`pair_late` template) at 11:45:00 — lunch-window branching, both track cards rendered side by side, countdown targeted the nearer end (Upper Lunch at 12:10), `Next:` slot correctly pointed at Upper Classes.
+  - Same template at 12:09:30 — live state transition at 12:10:00 from branching ("Lunch window" + two cards) to single-block ("Block 5/6 (Lower Class)") fired autonomously, countdown reset from 22s → 19m 37s pointing at lower's 12:30 end, day label and validity stayed stable with no repaint or flicker. This was the actual three-layer-separation test and it held.
+
+  **Rule-12 lesson: do not mark a phase complete until the tick survives a state transition in the browser, not just `getCurrentStatus` unit tests. The data layer can be right and the integration seam still be missing.**
+- **Known limitation — upper-track passing period is invisible during lunch window.** In templates with a lunch split (e.g., `pair_late`, `red_regular`, `gray_regular`), the upper track's passing period between Upper Lunch and Upper Classes (e.g., 12:10–12:15 on `pair_late`) is not rendered as branching because only one block (the lower class) is active during that window. `getCurrentStatus` correctly returns the single-block case per its contract ("branch only when both tracks are simultaneously active"), so an upper-track student opening the app at 12:12 sees "Block 5/6 (Lower Class) · Ends in 18m" with no indication that their own state (passing period) is different from what's displayed. This is spec-compliant but a real UX asymmetry. Candidate for v1.1 — possible fixes include (a) branch whenever *any* track has a mismatch with another track's state, not just when both are in blocks, or (b) introduce a third "partial-branch" rendering mode. Do not fix in v1 without real-student evidence that it's a problem — the spec explicitly rejects per-student track assignment and any fix here needs to stay compatible with that rejection.
 - **Synthetic-time testing pattern.** Override `boot()` with a fake `now` that advances in real time: `const BASE_FAKE = new Date('2025-08-26T11:29:30').getTime(); const BASE_REAL = Date.now(); window.Date = class extends Date { ... }`. Watching the countdown tick through a block-end transition confirms both the tick logic and the `renderTemporal` handling of status changes mid-session.
 - **"Block 5 (Lower Class)" reads as redundant.** The track column already carries the Upper/Lower distinction; the `block_name` "Block 5 (Lower Class)" then double-labels. Consider shortening to just "Block 5" in the sheet — v1.1 polish.
 - **"Musical Theatre Performance at Disney's California Adventure" is exactly the kind of event that tests announcement_text.** It's not sports/banquet/spirit, but it's also not something a student should "confirm with your teacher" about. The current filter correctly excludes it via absence from the include list. If a real event like this should surface as an announcement in the future, it needs a keyword added.
