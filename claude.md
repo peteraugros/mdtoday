@@ -63,6 +63,8 @@ The Now view simultaneously exposes three independent state layers. These are no
 
 **Implementation consequence:** These three layers are three discrete DOM regions with independent update lifecycles. The temporal layer re-renders every tick; the validity and deviation layers stay mounted and stable. A naive implementation re-renders everything on the countdown tick and makes the announcement banner flicker every second. Structure this correctly from day one.
 
+**Temporal layer has two rendering modes.** Most of the day, the Now view shows a single "current block" with one countdown. During the Upper/Lower lunch window, it shows both tracks side by side — Upper Lunch / Upper Classes vs Lower Classes / Lower Lunch — each with its own current block and countdown. This branching is a property of Mater Dei's schedule, not a UI choice. See the Template Catalog for why per-student track assignment was rejected.
+
 ### The three trust states (first-class visual design)
 
 Every render of the Now view is in exactly one of three states. A student should recognize which state they are looking at in under 1.5 seconds, without reading the label — by color, layout, or icon, not prose.
@@ -155,6 +157,18 @@ Critical properties:
 
 **We do not maintain this data. The school does, for their own reasons.** That's the biggest trust upgrade the architecture has: an authoritative source we don't own.
 
+### Live URLs (v1)
+
+These are the exact URLs the app fetches. They live in `js/data.js` as constants and in `README.md` for human reference.
+
+- **iCal feed:** `https://www.materdei.org/apps/events/ical/?id=33`
+- **Templates CSV:** `https://docs.google.com/spreadsheets/d/e/2PACX-1vRomv0QyX9GdMNWow7lDTlk6Wg4AjZbgGuGJhmrFu0mFuEFIXbyzCwTn8s5xKYqBcfxzeP21muToXIQ/pub?gid=0&single=true&output=csv`
+- **Summary Map CSV:** `https://docs.google.com/spreadsheets/d/e/2PACX-1vRomv0QyX9GdMNWow7lDTlk6Wg4AjZbgGuGJhmrFu0mFuEFIXbyzCwTn8s5xKYqBcfxzeP21muToXIQ/pub?gid=504710999&single=true&output=csv`
+
+The two CSV URLs share the same document ID (`2PACX-1vRomv...`) and differ only in `gid` — each tab of the sheet has its own `gid`. The `Automatically republish when changes are made` setting is enabled on the sheet, so edits propagate to these URLs within a minute or two.
+
+The iCal URL is year-scoped — Mater Dei publishes a new feed for each school year (`id=33` is the 2025–2026 identifier). Expect to update this constant each June.
+
 ### Source 2: Google Sheet (authoritative for bell-time templates)
 
 The Sheet's only job is to define **bell-time templates** and a **summary map** that translates calendar SUMMARY strings into template IDs.
@@ -163,11 +177,26 @@ Two tabs:
 
 **Tab 1: `templates`** — bell-time block definitions
 
-| template_id | block_order | block_name | start_time | end_time |
-|---|---|---|---|---|
-| red_regular | 1 | Block 1 | 08:00 | 09:15 |
-| red_regular | 2 | Block 3 | 09:20 | 10:35 |
-| ... | ... | ... | ... | ... |
+| template_id | block_order | block_name | start_time | end_time | track |
+|---|---|---|---|---|---|
+| red_regular | 1 | Block 1 | 08:00 | 09:15 | |
+| red_regular | 2 | Block 3 | 09:20 | 10:45 | |
+| red_regular | 3 | Block 5 (Lower Class) | 10:50 | 12:05 | lower |
+| red_regular | 3 | Upper Lunch | 10:50 | 11:30 | upper |
+| red_regular | 4 | Upper Classes | 11:35 | 12:50 | upper |
+| red_regular | 4 | Lower Lunch | 12:10 | 12:50 | lower |
+| red_regular | 5 | Block 7 | 12:55 | 14:10 | |
+| ... | ... | ... | ... | ... | |
+
+The `track` column encodes the Upper/Lower lunch split. Most blocks apply to all students — these rows have a blank `track`. During the lunch window, the schedule branches into two parallel tracks that run simultaneously:
+
+- `track = upper` — students with Upper Lunch (eat first, then class)
+- `track = lower` — students with Lower Lunch (class first, then eat)
+- blank — applies to everyone (used for all non-lunch blocks, plus for Mass/Rally where every student is in the same place)
+
+The same `block_order` value appears on both track rows in the lunch window. This is intentional: it means "same slot in the sequence, two parallel tracks." The resolver filters rows by current time and returns one row (blank track) or two rows (upper + lower) for the Now view to render.
+
+**Why this design:** a student's lunch assignment is a property of the class they're enrolled in during the lunch window, not a property of the student. A student might be Upper on Red days and Lower on Gray days because their 5th and 6th period classes are different courses. Self-classification per student would silently lie; rendering both tracks during the ambiguous window is honest.
 
 **Tab 2: `summary_map`** — calendar SUMMARY → template_id
 
@@ -175,15 +204,25 @@ Two tabs:
 |---|---|
 | RED: B. 1, 3, 5, 7 | red_regular |
 | GRAY: B. 2, 4, 6, 8 | gray_regular |
-| RED (Late Start): B. 1, 3, 5, 7 | red_late_start |
-| GRAY (Late Start): B. 2, 4, 6, 8 | gray_late_start |
-| RED (Mass Schedule): B. 1, 3, 5, 7 | red_mass |
-| GRAY (Mass Schedule): B. 2, 4, 6, 8 | gray_mass |
-| RED (Rally Schedule): B. 1, 3, 5, 7 | red_rally |
-| GRAY (Rally Schedule): B. 2, 4, 6, 8 | gray_rally |
-| RED (Pair Day - Early Dismissal): B. 1, 3, 5, 7 | red_pair_early |
-| GRAY (Pair Day - Early Dismissal): B. 2, 4, 6, 8 | gray_pair_early |
-| ... | ... |
+| RED (Late Start): B. 1, 3, 5, 7 | late_start |
+| GRAY (Late Start): B. 2, 4, 6, 8 | late_start |
+| RED (Mass Schedule): B. 1, 3, 5, 7 | mass |
+| GRAY (Mass Schedule): B. 2, 4, 6, 8 | mass |
+| RED (Rally Schedule): B. 1, 3, 5, 7 | rally |
+| GRAY (Rally Schedule): B. 2, 4, 6, 8 | rally |
+| RED (Pair Day - Early Dismissal): B. 1, 3, 5, 7 | pair_early |
+| GRAY (Pair Day - Early Dismissal): B. 2, 4, 6, 8 | pair_early |
+| GRAY (Pair Day - Late Start): B. 2, 4, 6, 8 | pair_late |
+| RED (Special Schedule) | fallback |
+| GRAY (Special Schedule) | fallback |
+| RED (Special Schedule): B. 1, 3, 5, 7 | fallback |
+| GRAY (Special Schedule): B. 2, 4, 6, 8 | fallback |
+| RED (Special Rally Schedule) | fallback |
+| RED (Special Mass Schedule - Early Dismissal): B. 3, 4, 5, 6 | fallback |
+| GRAY (Special Mass Schedule) | fallback |
+| Special Online Schedule: B. 1, 2, 7, 8 | fallback |
+
+These are the actual rows present in the live sheet as of the 2025–2026 school year. Nineteen distinct SUMMARY strings, ten template_ids referenced. When Mater Dei adds a new schedule variant to their calendar, it appears as an unmapped SUMMARY (triggering Assumed state) until a row is added here.
 
 Both tabs publish to CSV. The app fetches both, plus the iCal feed, and does the join client-side.
 
@@ -192,6 +231,48 @@ Both tabs publish to CSV. The app fetches both, plus the iCal feed, and does the
 ### Source 3: Nothing else
 
 There is no database, no backend API, no authentication system, no CMS. The entire data layer is two CSV URLs and one iCal URL.
+
+---
+
+## Template Catalog (v1 — 2025–2026)
+
+The populated sheet contains **10 templates** covering every bell schedule Mater Dei runs:
+
+| template_id | rows | block duration | description |
+|---|---|---|---|
+| `red_regular` | 8 | 75 min | Regular Red Day (Blocks 1, 3, 5, 7) |
+| `gray_regular` | 8 | 75 min | Regular Gray Day (Blocks 2, 4, 6, 8) |
+| `monday_homeroom` | 9 | 75 min | Monday schedule with Homeroom & Announcements block |
+| `late_start` | 8 | 75 min | Wednesday Late Start (8:45 start, faculty PLC first) |
+| `mass` | 9 | 60 min | Mass Schedule (Mass 10:30–11:55 replaces Block 5/6 position) |
+| `rally` | 9 | 60 min | Rally Schedule (Rally 10:30–11:35, shorter than Mass) |
+| `pair_early` | 8 | 60 min | Pair Day Early Dismissal (out at 13:20) |
+| `pair_late` | 8 | 60 min | Pair Day Late Start (9:00 start) |
+| `minimum_day` | 5 | 60 min | Minimum Day (dismissed 12:45, no lunch block, shared Nutrition break) |
+| `fallback` | 1 | — | Placeholder for Special Schedule variants where bell times are unknown |
+
+### The `fallback` template convention
+
+When a calendar SUMMARY matches but the bell times can't be pre-specified (e.g., Mater Dei's various `Special Schedule`, `Special Mass Schedule`, `Special Rally Schedule`, `Special Online Schedule` variants — these are announced ad-hoc), the sheet maps them all to `fallback`.
+
+`fallback` is a single-row template whose `block_name` is the student-facing message: "Special Schedule — check with your teacher." It renders from 08:00–15:00 as a single all-day placeholder.
+
+This gives us three honest states:
+- **Matched template with known times** → normal render, Confirmed state
+- **Matched template with unknown times** (maps to `fallback`) → placeholder render, Confirmed state ("we recognize today is weird, and we're telling you we don't know the details")
+- **Unmatched SUMMARY** → Assumed state ("we don't recognize today at all")
+
+These are meaningfully different situations and the app communicates each one distinctly.
+
+### Monday Homeroom — resolver logic, not data
+
+The iCal feed does **not** distinguish Monday Red Days from Tuesday or Friday Red Days — they all carry the SUMMARY `"RED: B. 1, 3, 5, 7"`. But Mater Dei runs the Monday Homeroom schedule on every Monday that school is in session.
+
+This is handled in `resolve.js`, not in the sheet. The resolver applies the following rule:
+
+> If today is a Monday AND the matched template is `red_regular` or `gray_regular`, substitute `monday_homeroom` instead.
+
+The Red/Gray distinction is preserved for labeling (so students see "Monday Red" not just "Monday"), but the bell times come from `monday_homeroom`. This is a localized resolver convention, not a general pattern — if Mater Dei ever publishes a distinct `MONDAY` SUMMARY in future school years, this rule should be removed in favor of explicit mapping.
 
 ---
 
@@ -453,6 +534,8 @@ export function validateSheet(sanitized) { /* throws on structural error */ }
 
 Given the data from `loadData()` and a date, produce a resolved view of that day. This module owns trust-state determination — it is the only place that decides Confirmed vs Stale vs Assumed. It reads `lastFetch` from the data object and compares against `FRESHNESS_HORIZON_MS` via `isFresh()`.
 
+It also owns the Monday substitution rule: when today is a Monday and the matched template is `red_regular` or `gray_regular`, the resolver substitutes `monday_homeroom` while preserving Red/Gray labeling in the trust-state text. See the Template Catalog section for rationale.
+
 Contract:
 ```js
 export function resolveDay(data, date = new Date()) {
@@ -461,6 +544,7 @@ export function resolveDay(data, date = new Date()) {
   //   announcement,     // string or null
   //   isDayOff,         // boolean
   //   dayOffLabel,      // string if isDayOff
+  //   dayLabel,         // string for UI: "Red Day", "Gray Day", "Monday Red", etc.
   //   trustState,       // 'confirmed' | 'stale' | 'assumed' | 'offline'
   //   unmatchedSummary  // string if today's event SUMMARY wasn't in summary_map (for debugging)
   // }
@@ -470,6 +554,11 @@ export function resolveDay(data, date = new Date()) {
   //   2. If !isFresh(data.lastFetch) → 'stale' (even if event matches)
   //   3. If no matching event today → 'assumed'
   //   4. If event matched and fresh → 'confirmed'
+  //
+  // Monday substitution (applied before trust state determination):
+  //   If date.getDay() === 1 (Monday) AND matched template_id is 'red_regular' or 'gray_regular':
+  //     substitute 'monday_homeroom' as the template
+  //     preserve original day-type in dayLabel ("Monday Red" / "Monday Gray")
 }
 ```
 
@@ -478,18 +567,23 @@ export function resolveDay(data, date = new Date()) {
 Responsibilities:
 - Given a resolved template and the current time, return current period + next period
 - Handle edge cases: before school, passing period, between blocks, after school, weekend
+- Handle the Upper/Lower lunch branch window — during that window, two parallel tracks are active simultaneously
 
 Contract:
 ```js
 export function getCurrentStatus(template, now = new Date()) {
   // Returns {
   //   status,                    // 'before' | 'period' | 'passing' | 'after'
-  //   currentBlock,              // block object or null
-  //   nextBlock,                 // block object or null
-  //   secondsToNextTransition    // number
+  //   currentBlock,              // for simple (blank-track) blocks: the single current block
+  //                              // for the lunch window: null (use currentTracks instead)
+  //   currentTracks,             // { upper: block, lower: block } during the lunch window, else null
+  //   nextBlock,                 // the next upcoming block (shared blocks) or null during lunch branching
+  //   secondsToNextTransition    // number — to whichever transition comes first across tracks
   // }
 }
 ```
+
+**Track branching rule:** during any time window where two `track`-tagged blocks overlap, the resolver returns both as `currentTracks: { upper, lower }` and sets `currentBlock` to null. Outside branching windows, `currentBlock` is populated and `currentTracks` is null. The Now view renders these as two UI paths — one side-by-side branch view, one standard single-block view — selected by which field is populated.
 
 ### `js/countdown.js` — Tick timer (temporal layer only)
 
@@ -586,16 +680,16 @@ Trust states map to color but must also differ in layout or iconography so color
 
 ## Build Order (v1)
 
-### Phase 0: Data sources first, code second
+### Phase 0: Data sources first, code second — ✅ COMPLETE
 
-1. Get the stable iCal feed URL from Mater Dei's calendar page (right-click Subscribe button) and verify it loads in the browser
-2. Create the Google Sheet with two tabs: `templates` and `summary_map`
-3. Enumerate every distinct SUMMARY value from the iCal feed that represents a schedule day — transcribe bell-time templates for each one from the official bell schedule PDF or photos of wall charts
-4. Populate the `summary_map` tab with every SUMMARY → template_id pairing
-5. Publish both tabs as CSV
-6. Confirm URLs load and parse correctly in the browser
+1. ✅ iCal feed URL confirmed stable: `https://www.materdei.org/apps/events/ical/?id=33`
+2. ✅ Google Sheet `MD Today — Data` created with two tabs: `templates` and `summary_map`
+3. ✅ Every schedule SUMMARY from the 2025–2026 feed enumerated and transcribed — 10 templates, 73 rows in `templates` tab
+4. ✅ `summary_map` populated with 19 rows covering every schedule-representing SUMMARY
+5. ✅ Both tabs published as CSV, URLs recorded in `README.md` and in the Live URLs section of this document
+6. ✅ Republish-on-change enabled on the sheet
 
-**Do not write any code until this is done.** If the data model doesn't work in the sources, it won't work in code.
+**Phase 0 outputs:** see the Template Catalog section (above) for the template list, and the Live URLs section for the fetch endpoints.
 
 ### Phase 1: Data layer (headless)
 
