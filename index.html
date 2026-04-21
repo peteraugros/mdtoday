@@ -11,71 +11,60 @@
   <script type="module">
     import * as data from './js/data.js';
     import { resolveDay } from './js/resolve.js';
+    import { getCurrentStatus } from './js/schedule.js';
   
-    console.log('--- Resolve test ---');
+    console.log('--- Schedule test ---');
   
     const payload = await data.loadData();
-    console.log('source:', payload.source, '| events:', payload.events.length);
   
-    // Test 1: Today
-    const today = resolveDay(payload);
-    console.log('\n[Today]');
-    console.log('  dayLabel:', today.dayLabel);
-    console.log('  templateId:', today.templateId);
-    console.log('  trustState:', today.trustState);
-    console.log('  isDayOff:', today.isDayOff);
-    console.log('  announcement:', today.announcement);
-    console.log('  blocks:', today.template?.blocks.length);
-    console.log('  unmatchedSummary:', today.unmatchedSummary);
+    // Use a known Red Day (Tuesday 2025-08-26) for deterministic time tests
+    const redDayDate = '2025-08-26';
+    const resolvedRed = resolveDay(payload, new Date(`${redDayDate}T10:00:00`));
+    console.log('Using:', resolvedRed.dayLabel, '-', resolvedRed.templateId);
+    console.log('Template blocks:');
+    console.table(resolvedRed.template.blocks);
   
-    // Test 2: A known Red Day on a non-Monday (Tuesday 8/26/2025)
-    const redTuesday = resolveDay(payload, new Date('2025-08-26T10:00:00'));
-    console.log('\n[Tuesday 2025-08-26 — expected Red Day]');
-    console.log('  dayLabel:', redTuesday.dayLabel);
-    console.log('  templateId:', redTuesday.templateId);
-    console.log('  trustState:', redTuesday.trustState);
-  
-    // Test 3: A Monday Red Day — should substitute to monday_homeroom
-    const mondayRed = resolveDay(payload, new Date('2025-08-18T10:00:00'));
-    console.log('\n[Monday 2025-08-18 — expected Monday Red]');
-    console.log('  dayLabel:', mondayRed.dayLabel);
-    console.log('  templateId:', mondayRed.templateId);
-    console.log('  expected templateId: monday_homeroom');
-  
-    // Test 4: A weekend day — no events, should be Assumed
-    const saturday = resolveDay(payload, new Date('2025-09-06T10:00:00'));
-    console.log('\n[Saturday 2025-09-06 — expected no events]');
-    console.log('  dayLabel:', saturday.dayLabel);
-    console.log('  templateId:', saturday.templateId);
-    console.log('  trustState:', saturday.trustState);
-    console.log('  expected trustState: assumed (weekday-or-weekend, no event)');
-  
-    // Test 5: Thanksgiving Break (if present in feed)
-    const thanksgiving = resolveDay(payload, new Date('2025-11-27T10:00:00'));
-    console.log('\n[Thursday 2025-11-27 — expected Thanksgiving Break]');
-    console.log('  dayLabel:', thanksgiving.dayLabel);
-    console.log('  isDayOff:', thanksgiving.isDayOff);
-    console.log('  dayOffLabel:', thanksgiving.dayOffLabel);
-  
-    // Test 6: Offline payload — should return offline state
-    const offlineResult = resolveDay({ source: 'none', events: [], templates: [], summaryMap: [] });
-    console.log('\n[Offline payload]');
-    console.log('  trustState:', offlineResult.trustState);
-    console.log('  expected: offline');
-  
-    // Test 7: A day with a rally event — should set announcement
-    // Look for any rally event and test its date
-    const rallyEvent = payload.events.find(e =>
-      /^homecoming rally|^fall rally|^winter rally|^spring rally/i.test(e.summary)
-    );
-    if (rallyEvent) {
-      console.log('\n[Testing announcement via rally event on', rallyEvent.date, ']');
-      const [y, m, d] = rallyEvent.date.split('-').map(n => parseInt(n, 10));
-      const rallyDay = resolveDay(payload, new Date(y, m - 1, d, 10, 0));
-      console.log('  dayLabel:', rallyDay.dayLabel);
-      console.log('  announcement:', rallyDay.announcement);
-      console.log('  (rally event SUMMARY was:', rallyEvent.summary, ')');
+    // Helper to test at a specific wall-clock time
+    function at(hhmm) {
+      const [h, m] = hhmm.split(':').map(n => parseInt(n, 10));
+      const d = new Date(`${redDayDate}T00:00:00`);
+      d.setHours(h, m, 0, 0);
+      return d;
     }
+  
+    function testAt(label, hhmm) {
+      const status = getCurrentStatus(resolvedRed.template, at(hhmm));
+      console.log(`\n[${hhmm} — ${label}]`);
+      console.log('  status:', status.status);
+      if (status.currentBlock) console.log('  currentBlock:', status.currentBlock.block_name, `(${status.currentBlock.start_time}-${status.currentBlock.end_time})`);
+      if (status.currentTracks) {
+        console.log('  currentTracks.upper:', status.currentTracks.upper.block_name, `(${status.currentTracks.upper.start_time}-${status.currentTracks.upper.end_time})`);
+        console.log('  currentTracks.lower:', status.currentTracks.lower.block_name, `(${status.currentTracks.lower.start_time}-${status.currentTracks.lower.end_time})`);
+      }
+      if (status.nextBlock) console.log('  nextBlock:', status.nextBlock.block_name, `(${status.nextBlock.start_time}-${status.nextBlock.end_time})`);
+      console.log('  secondsToNextTransition:', status.secondsToNextTransition);
+    }
+  
+    // Red Day bell schedule:
+    //   Block 1    08:00-09:15
+    //   Block 3    09:20-10:45
+    //   Block 5    10:50-12:05 (lower)  /  Upper Lunch 10:50-11:30
+    //   Upper Class 11:35-12:50 (upper) /  Lower Lunch 12:10-12:50
+    //   Block 7    12:55-14:10
+    //   Office Hr  14:20-15:00
+  
+    testAt('before school', '07:30');
+    testAt('in Block 1', '08:30');
+    testAt('passing period', '09:17');
+    testAt('in Block 3', '10:00');
+    testAt('passing to lunch window', '10:47');
+    testAt('lunch window early (upper eating, lower in class)', '11:00');
+    testAt('lunch window middle (upper back in class, lower still in class)', '11:45');
+    testAt('lunch window late (upper in class, lower at lunch)', '12:30');
+    testAt('in Block 7', '13:30');
+    testAt('passing to office hour', '14:15');
+    testAt('in Office Hour', '14:30');
+    testAt('after school', '15:30');
   </script>
 </body>
 </html>
