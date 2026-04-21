@@ -28,7 +28,8 @@ import ICAL from 'https://cdn.jsdelivr.net/npm/ical.js@1.5.0/+esm';
 //
 // NOTE: The iCal URL is year-scoped. Check each June whether Mater Dei has
 // rolled over to the next school year's calendar (id may change).
-export const ICAL_URL = 'https://www.materdei.org/apps/events/ical/?id=33';
+export const ICAL_URL = 'https://corsproxy.io/?' + encodeURIComponent('https://www.materdei.org/apps/events/ical/?id=33');
+
 
 export const TEMPLATES_CSV_URL =
   'https://docs.google.com/spreadsheets/d/e/2PACX-1vRomv0QyX9GdMNWow7lDTlk6Wg4AjZbgGuGJhmrFu0mFuEFIXbyzCwTn8s5xKYqBcfxzeP21muToXIQ/pub?gid=0&single=true&output=csv';
@@ -303,7 +304,199 @@ export class SheetValidationError extends Error {
   }
 
 // ---------------------------------------------------------------------------
-// Main entry point
+// Fetchers
 // ---------------------------------------------------------------------------
+//
+// Each fetcher is a thin wrapper around fetch() + parser. They do one job:
+// get the raw data into memory and parse it. Sanitization and validation
+// happen further up the pipeline in loadData().
+//
+// Fetchers throw on network failure or parse failure. The caller (loadData)
+// catches and degrades to cache.
 
-// TODO: loadData()
+/**
+ * Fetch and parse one Google Sheet CSV tab.
+ * Returns an array of row objects keyed by header row.
+ */
+async function fetchCsv(url) {
+    const response = await fetch(url);
+    if (!response.ok) {
+      throw new Error(`CSV fetch failed: ${response.status} ${response.statusText} (${url})`);
+    }
+    const text = await response.text();
+  
+    // PapaParse with header:true returns an array of objects keyed by first row
+    const parsed = Papa.parse(text, {
+      header: true,
+      skipEmptyLines: true,
+    });
+  
+    if (parsed.errors && parsed.errors.length > 0) {
+      // PapaParse errors are usually "trailing comma" or "quote mismatch" warnings —
+      // log them but don't throw. The sanitizer will handle what it can.
+      console.warn('[data] CSV parse warnings:', parsed.errors);
+    }
+  
+    return parsed.data;
+  }
+  
+  /**
+   * Fetch and parse the Mater Dei iCal feed.
+   * Returns an array of simplified event objects: { date, summary, description }.
+   *
+   * The raw feed is ~1,500 events across a school year, ~1MB of text. We simplify
+   * to the fields the resolver actually needs, and filter to this school year only
+   * so localStorage stays small.
+   */
+  async function fetchIcal(url) {
+    const response = await fetch(url);
+    if (!response.ok) {
+      throw new Error(`iCal fetch failed: ${response.status} ${response.statusText} (${url})`);
+    }
+    const text = await response.text();
+  
+    const jcal = ICAL.parse(text);
+    const vcalendar = new ICAL.Component(jcal);
+    const vevents = vcalendar.getAllSubcomponents('vevent');
+  
+    const simplified = vevents.map(vevent => {
+      const event = new ICAL.Event(vevent);
+      // For all-day events (which is what schedule events are), startDate is a
+      // timezoneless ICAL.Time — we want the raw YYYY-MM-DD string.
+      const start = event.startDate;
+      const dateStr = start
+        ? `${start.year}-${String(start.month).padStart(2, '0')}-${String(start.day).padStart(2, '0')}`
+        : null;
+  
+      return {
+        date: dateStr,
+        summary: sanitizeSummary(event.summary || ''),
+        description: event.description || '',
+      };
+    });
+  
+    return simplified;
+  }
+  
+  // ---------------------------------------------------------------------------
+  // Cache helpers
+  // ---------------------------------------------------------------------------
+  
+  function readCache() {
+    try {
+      const raw = localStorage.getItem(CACHE_KEY);
+      if (!raw) return null;
+      return JSON.parse(raw);
+    } catch (err) {
+      console.warn('[data] cache read failed:', err);
+      return null;
+    }
+  }
+  
+  function writeCache(payload) {
+    try {
+      localStorage.setItem(CACHE_KEY, JSON.stringify(payload));
+    } catch (err) {
+      // QuotaExceeded or private-mode failure — not fatal, we can still render
+      console.warn('[data] cache write failed:', err);
+    }
+  }
+  
+  // ---------------------------------------------------------------------------
+  // Main entry point
+  // ---------------------------------------------------------------------------
+  
+  /**
+   * Load all data sources and return a normalized payload.
+   *
+   * On network success: fetch, sanitize, validate, cache, return.
+   * On network failure: fall back to cache.
+   * On cache miss too: return an empty-but-shaped object with source='none'.
+   *
+   * Never throws. Trust-state determination happens later in resolveDay().
+   */
+  export async function loadData() {
+    const warnings = [];
+    let events = null;
+    let templates = null;
+    let summaryMap = null;
+  
+    // Kick off all three fetches in parallel — they're independent
+    const results = await Promise.allSettled([
+      fetchIcal(ICAL_URL),
+      fetchCsv(TEMPLATES_CSV_URL),
+      fetchCsv(SUMMARY_MAP_CSV_URL),
+    ]);
+  
+    const [icalResult, templatesResult, summaryMapResult] = results;
+  
+    if (icalResult.status === 'fulfilled') {
+      events = icalResult.value;
+    } else {
+      warnings.push(`iCal fetch failed: ${icalResult.reason?.message || icalResult.reason}`);
+    }
+  
+    if (templatesResult.status === 'fulfilled') {
+      templates = sanitizeTemplatesRows(templatesResult.value);
+    } else {
+      warnings.push(`Templates CSV fetch failed: ${templatesResult.reason?.message || templatesResult.reason}`);
+    }
+  
+    if (summaryMapResult.status === 'fulfilled') {
+      summaryMap = sanitizeSummaryMapRows(summaryMapResult.value);
+    } else {
+      warnings.push(`Summary map CSV fetch failed: ${summaryMapResult.reason?.message || summaryMapResult.reason}`);
+    }
+  
+    // If sheet fetches succeeded, run validation
+    let validationOk = false;
+    if (templates && summaryMap) {
+      try {
+        validateSheet(templates, summaryMap);
+        validationOk = true;
+      } catch (err) {
+        if (err instanceof SheetValidationError) {
+          warnings.push(`Sheet validation failed: ${err.details.length} issue(s)`);
+          console.error('[data] Sheet validation details:', err.details);
+        } else {
+          warnings.push(`Sheet validation threw unexpectedly: ${err.message}`);
+        }
+      }
+    }
+  
+    // Did all three sources arrive AND validate?
+    const allFreshAndValid = events && templates && summaryMap && validationOk;
+  
+    if (allFreshAndValid) {
+      const payload = {
+        events,
+        templates,
+        summaryMap,
+        lastFetch: new Date().toISOString(),
+        source: 'network',
+        warnings,
+      };
+      writeCache(payload);
+      return payload;
+    }
+  
+    // Fall back to cache
+    const cached = readCache();
+    if (cached) {
+      return {
+        ...cached,
+        source: 'cache',
+        warnings: [...warnings, '(using cached data)'],
+      };
+    }
+  
+    // No network, no cache — return empty shape
+    return {
+      events: [],
+      templates: [],
+      summaryMap: [],
+      lastFetch: null,
+      source: 'none',
+      warnings: [...warnings, '(no cache available)'],
+    };
+  }

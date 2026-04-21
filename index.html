@@ -11,117 +11,31 @@
   <script type="module">
     import * as data from './js/data.js';
   
-    console.log('--- Validator tests ---');
+    console.log('--- Live fetch test ---');
+    console.log('Fetching... (check Network tab if this hangs)');
   
-    // Helper to run a test and catch errors cleanly
-    function runTest(name, fn) {
-      try {
-        const result = fn();
-        console.log(`✓ ${name}:`, result);
-      } catch (e) {
-        if (e instanceof data.SheetValidationError) {
-          console.log(`✓ ${name}: threw with ${e.details.length} issue(s):`, e.details);
-        } else {
-          console.error(`✗ ${name}: unexpected error:`, e);
-        }
-      }
-    }
+    const payload = await data.loadData();
   
-    // Test 1: Valid minimal pair should pass
-    runTest('valid minimal', () => {
-      const templates = [
-        { template_id: 'red_regular', block_order: 1, block_name: 'Block 1', start_time: '08:00', end_time: '09:15', track: null },
-        { template_id: 'red_regular', block_order: 2, block_name: 'Block 3', start_time: '09:20', end_time: '10:45', track: null },
-      ];
-      const summaryMap = [
-        { calendar_summary: 'RED: B. 1, 3, 5, 7', template_id: 'red_regular' },
-      ];
-      return data.validateSheet(templates, summaryMap);
-    });
+    console.log('source:', payload.source);
+    console.log('lastFetch:', payload.lastFetch);
+    console.log('warnings:', payload.warnings);
+    console.log('events count:', payload.events.length);
+    console.log('templates count:', payload.templates.length);
+    console.log('summaryMap count:', payload.summaryMap.length);
   
-    // Test 2: Lunch window with upper/lower tracks (same block_order, legal)
-    runTest('valid with upper/lower tracks', () => {
-      const templates = [
-        { template_id: 'red_regular', block_order: 3, block_name: 'Block 5 (Lower Class)', start_time: '10:50', end_time: '12:05', track: 'lower' },
-        { template_id: 'red_regular', block_order: 3, block_name: 'Upper Lunch', start_time: '10:50', end_time: '11:30', track: 'upper' },
-        { template_id: 'red_regular', block_order: 4, block_name: 'Upper Classes', start_time: '11:35', end_time: '12:50', track: 'upper' },
-        { template_id: 'red_regular', block_order: 4, block_name: 'Lower Lunch', start_time: '12:10', end_time: '12:50', track: 'lower' },
-      ];
-      return data.validateSheet(templates, []);
-    });
+    console.log('first 3 events:', payload.events.slice(0, 3));
+    console.log('first 3 templates:', payload.templates.slice(0, 3));
+    console.log('full summaryMap:', payload.summaryMap);
   
-    // Test 3: Duplicate (template_id, block_order, track) should fail
-    runTest('rejects duplicate block_order within same track', () => {
-      const templates = [
-        { template_id: 'red_regular', block_order: 1, block_name: 'Block 1', start_time: '08:00', end_time: '09:15', track: null },
-        { template_id: 'red_regular', block_order: 1, block_name: 'Block 1 again', start_time: '09:00', end_time: '10:00', track: null },
-      ];
-      return data.validateSheet(templates, []);
-    });
+    // Count distinct template_ids that appear in the templates data
+    const distinctTemplates = [...new Set(payload.templates.map(r => r.template_id))];
+    console.log('distinct template_ids:', distinctTemplates);
   
-    // Test 4: summary_map references undefined template
-    runTest('rejects unmapped template_id reference', () => {
-      const templates = [
-        { template_id: 'red_regular', block_order: 1, block_name: 'Block 1', start_time: '08:00', end_time: '09:15', track: null },
-      ];
-      const summaryMap = [
-        { calendar_summary: 'GRAY: B. 2, 4, 6, 8', template_id: 'gray_regular' }, // gray_regular doesn't exist
-      ];
-      return data.validateSheet(templates, summaryMap);
-    });
-  
-    // Test 5: start_time >= end_time
-    runTest('rejects backwards time range', () => {
-      const templates = [
-        { template_id: 'red_regular', block_order: 1, block_name: 'Block 1', start_time: '10:00', end_time: '08:00', track: null },
-      ];
-      return data.validateSheet(templates, []);
-    });
-  
-    // Test 6: overlapping blocks within same track
-    runTest('rejects overlap within same track', () => {
-      const templates = [
-        { template_id: 'red_regular', block_order: 1, block_name: 'Block 1', start_time: '08:00', end_time: '09:30', track: null },
-        { template_id: 'red_regular', block_order: 2, block_name: 'Block 3', start_time: '09:00', end_time: '10:00', track: null }, // overlaps 08:00-09:30
-      ];
-      return data.validateSheet(templates, []);
-    });
-  
-    // Test 7: null start/end times
-    runTest('rejects null times', () => {
-      const templates = [
-        { template_id: 'red_regular', block_order: 1, block_name: 'Block 1', start_time: null, end_time: '09:15', track: null },
-      ];
-      return data.validateSheet(templates, []);
-    });
-  
-    // Test 8: bad block_order
-    runTest('rejects non-integer block_order', () => {
-      const templates = [
-        { template_id: 'red_regular', block_order: NaN, block_name: 'Block 1', start_time: '08:00', end_time: '09:15', track: null },
-      ];
-      return data.validateSheet(templates, []);
-    });
-  
-    // Test 9: bad track value
-    runTest('rejects invalid track value', () => {
-      const templates = [
-        { template_id: 'red_regular', block_order: 1, block_name: 'Block 1', start_time: '08:00', end_time: '09:15', track: 'middle' },
-      ];
-      return data.validateSheet(templates, []);
-    });
-  
-    // Test 10: duplicate summary
-    runTest('rejects duplicate calendar_summary', () => {
-      const templates = [
-        { template_id: 'red_regular', block_order: 1, block_name: 'Block 1', start_time: '08:00', end_time: '09:15', track: null },
-      ];
-      const summaryMap = [
-        { calendar_summary: 'RED: B. 1, 3, 5, 7', template_id: 'red_regular' },
-        { calendar_summary: 'RED: B. 1, 3, 5, 7', template_id: 'red_regular' }, // duplicate
-      ];
-      return data.validateSheet(templates, summaryMap);
-    });
+    // Today's events (if any)
+    const today = new Date();
+    const todayStr = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
+    const todayEvents = payload.events.filter(e => e.date === todayStr);
+    console.log(`events on ${todayStr}:`, todayEvents);
   </script>
 </body>
 </html>
