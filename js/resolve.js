@@ -19,12 +19,19 @@ import { isFresh } from './data.js';
 // Keep this list strict. False positives here (marking a real school day as
 // a day off) are much worse than false negatives (a true day off leaking
 // through and showing as Assumed, which is already a safe state).
+//
+// History: 'holiday' was removed 2026-04-20 because it matched sport events
+// like "V Girls Basketball @ Portland Holiday Classic" and "V Girls Water
+// Polo @ Holiday Cup" as false-positive day-offs. Every legitimate day-off
+// in the Mater Dei feed is already covered by 'no school' or 'break', so
+// 'holiday' was redundant as well as noisy. If a future school year adds
+// day-off SUMMARYs that rely on 'holiday' alone, re-add it with a tighter
+// pattern (e.g., /\bschool holiday\b/i).
 
 const DAY_OFF_KEYWORDS = [
   'break',         // "Thanksgiving Break", "Winter Break", "Spring Break"
-  'no school',     // "No School - MLK Day"
+  'no school',     // "No School - MLK Day", "No School - MD Holiday"
   'no classes',
-  'holiday',       // "School Holiday"
   'recess',
   'closed',
 ];

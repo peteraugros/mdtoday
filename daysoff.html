@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#B71C1C">
+  <title>MD Today — Days Off</title>
+  <link rel="manifest" href="./manifest.json">
+  <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="MD Today">
+  <link rel="stylesheet" href="./css/styles.css">
+</head>
+<body>
+  <div class="page">
+
+    <header class="page-header">
+      <div class="page-header__brand">MD Today</div>
+      <div class="page-header__date" id="header-date">—</div>
+    </header>
+
+    <main class="daysoff" id="daysoff">
+
+      <!-- Validity region — trust state banner (reused from Now + Schedule views) -->
+      <section class="validity" id="validity" aria-live="polite">
+        <div class="validity__icon" id="validity-icon" aria-hidden="true"></div>
+        <div class="validity__body">
+          <div class="validity__title" id="validity-title"></div>
+          <div class="validity__detail" id="validity-detail"></div>
+        </div>
+      </section>
+
+      <!-- Days off card -->
+      <section class="daysoff-card" id="daysoff-card">
+        <div class="daysoff-card__heading" id="daysoff-heading">Upcoming days off</div>
+
+        <!-- Empty state (no upcoming days off, or offline with no cache) -->
+        <div class="daysoff-empty" id="daysoff-empty" hidden>
+          <div class="daysoff-empty__text" id="daysoff-empty-text"></div>
+        </div>
+
+        <!-- Days-off list -->
+        <ul class="daysoff-list" id="daysoff-list" hidden></ul>
+      </section>
+
+    </main>
+
+    <footer class="page-footer">
+      <a href="./index.html">← Back to Now</a>
+      <div>MD Today · v1.0.1</div>
+    </footer>
+
+  </div>
+
+  <script type="module" src="./js/daysoff-view.js"></script>
+  <script>
+    // Service worker registration. Standalone (not a module) so it runs on
+    // every browser. If the browser doesn't support SW, nothing happens —
+    // the app still works, just without the offline shell.
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./sw.js').catch((err) => {
+          console.warn('[sw] registration failed:', err);
+        });
+      });
+    }
+  </script>
+</body>
+</html>

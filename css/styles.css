@@ -369,8 +369,70 @@
     width: 1%;
   }
 
-  /* Footer variant on the Schedule view — back link above the version text */
+  /* Footer variant on multi-view pages — links stack above the version text */
   .page-footer a {
-    display: inline-block;
+    display: block;
     margin-bottom: var(--spacing-xs);
+  }
+
+  /* ---------------------------------------------------------------------------
+     Days Off view
+     ---------------------------------------------------------------------------
+     Static list of upcoming day-off groups. No interactivity. Paints once.
+     Reuses .validity from the Now / Schedule views.
+     ------------------------------------------------------------------------- */
+
+  .daysoff {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-md);
+  }
+
+  .daysoff-card {
+    background: var(--md-gray-surface);
+    border-radius: var(--radius);
+    padding: var(--spacing-lg);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  }
+
+  .daysoff-card__heading {
+    font-size: 0.875rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--md-gray-text-muted);
+    margin-bottom: var(--spacing-md);
+  }
+
+  .daysoff-empty {
+    padding: var(--spacing-md) 0;
+    font-size: 1rem;
+    color: var(--md-gray-text-muted);
+  }
+
+  .daysoff-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
+
+  .daysoff-item {
+    padding: var(--spacing-md) 0;
+    border-bottom: 1px solid var(--md-gray-border);
+  }
+
+  .daysoff-item:last-child {
+    border-bottom: none;
+  }
+
+  .daysoff-item__label {
+    font-size: 1.0625rem;
+    font-weight: 600;
+    color: var(--md-gray-text);
+    margin-bottom: 2px;
+  }
+
+  .daysoff-item__meta {
+    font-size: 0.875rem;
+    color: var(--md-gray-text-muted);
+    font-variant-numeric: tabular-nums;
   }
