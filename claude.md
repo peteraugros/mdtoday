@@ -513,7 +513,8 @@ mdtoday/
 │   ├── resolve.js          ← The resolution pipeline (date → template + announcement + trust state)
 │   ├── schedule.js         ← Current period / next period logic
 │   ├── countdown.js        ← Tick timer for Now view (temporal layer only)
-│   └── app.js              ← View routing + render orchestration
+│   ├── app.js              ← Now view entry point (render orchestration, tick wiring)
+│   └── schedule-view.js    ← Schedule view entry point (static render, no tick)
 ├── sw.js                   ← Service worker (cache strategy)
 ├── manifest.json           ← PWA manifest (icons, theme color, name)
 ├── icons/
@@ -664,13 +665,32 @@ export function stopCountdown() {
 
 This module is scoped to the temporal layer of the three-layer model. It has no knowledge of validity, deviation, `currentResolved`, or any schedule concept. If this module is importing from `data.js`, `resolve.js`, or `schedule.js`, it is wrong.
 
-### `js/app.js` — View orchestration
+### `js/app.js` — Now view orchestration
+
+The Now view's entry point. Loaded only by `index.html`.
 
 Responsibilities:
-- Detect which view is loaded (by filename or hash)
-- Call the right render function
-- Handle navigation (simple `<a>` links work fine — no SPA routing)
-- On Now view: mount the three DOM regions (temporal / validity / deviation) once, then hand each region to its respective renderer
+- Load data via `data.js` once at boot
+- Mount the three DOM regions (validity / temporal / deviation)
+- `renderStable(now)` paints validity + deviation + header date once per data load
+- `tickTemporal(now)` paints only the temporal region (called every second by `countdown.js`)
+- Wire `startCountdown(tickTemporal, onLongResume)` to start ticking
+- `onLongResume` callback: on tab visible after ≥1h hidden, re-run `loadData` + `renderStable` + `tickTemporal` + `startCountdown`
+
+No SPA routing. Navigation to other views is a plain `<a href>` to another HTML file.
+
+### `js/schedule-view.js` — Schedule view orchestration
+
+The Schedule view's entry point. Loaded only by `schedule.html`.
+
+Responsibilities:
+- Load data via `data.js` once at boot
+- Resolve today via `resolveDay`
+- Render the validity banner (same CSS classes as the Now view — trust state carries over per the Phase 3 spec)
+- Render either the block table, or a dedicated empty state for day-off / Assumed / Offline
+- Paint once. No tick, no subscription to `countdown.js`, no dynamic updates
+
+Intentional duplication from `app.js`: `formatTimeOfDay`, `relativeTimeAgo`, `DATE_FMT`, and the body of `renderValidity` are copy-pasted rather than extracted into a shared `render.js` module. A dedupe refactor is logged as a v2 candidate; the duplication is small, stable, and keeps each view a self-contained entry point.
 
 ---
 
@@ -826,19 +846,41 @@ These emerged during implementation and are worth logging so future sessions kno
 - **"Block 5 (Lower Class)" reads as redundant.** The track column already carries the Upper/Lower distinction; the `block_name` "Block 5 (Lower Class)" then double-labels. Consider shortening to just "Block 5" in the sheet — v1.1 polish.
 - **"Musical Theatre Performance at Disney's California Adventure" is exactly the kind of event that tests announcement_text.** It's not sports/banquet/spirit, but it's also not something a student should "confirm with your teacher" about. The current filter correctly excludes it via absence from the include list. If a real event like this should surface as an announcement in the future, it needs a keyword added.
 
-### Phase 3: Schedule view
+### Phase 3: Schedule view — ✅ COMPLETE
 
-1. `schedule.html` renders today's template as a clean table
-2. One tap from `index.html`
-3. Trust state indicator carries over from Now view — if today is Assumed, the schedule view must say so too
+1. ✅ `schedule.html` renders today's template as a clean table
+2. ✅ One tap from `index.html` (`Today's schedule →` link in footer; `← Back to Now` on Schedule view)
+3. ✅ Trust state indicator carries over from Now view — Assumed / Stale / Offline all render the same validity banner shape and CSS classes
 
-### Phase 4: PWA shell
+**Ship criterion:** ✅ MET. Verified on 2026-04-20 across three states: Confirmed render of today's `monday_homeroom` template with all 9 rows including labeled upper/lower tracks; Assumed empty-state on 2026-07-15; day-off empty-state on 2026-02-02 ("NO SCHOOL - MD HOLIDAY").
 
-1. `manifest.json` with icons and theme color
-2. `sw.js` with stale-while-revalidate for shell, network-first for HTML
-3. Test: airplane mode, reload, still works (enters Stale trust state correctly)
+### Phase 3 implementation notes
 
-**Ship criterion:** Add to home screen on iOS and Android, open without network, usable, trust state reads as Stale.
+- **Static render only.** The Schedule view paints once on load and never updates. No countdown subscription, no tick. The Now view owns "where am I in the day"; this view is a reference table. Separate tools, separate code paths.
+- **Dedicated empty states per trust state.** Day-off → "No school today." with the event SUMMARY as the day label. Assumed → "No schedule on file for today. Confirm with your teacher." + visible assumed-state validity banner. Offline → "Schedule unavailable. Check with the front office." + offline-state validity banner. Three distinct renderings so the student can distinguish "school is closed" from "I don't know what school is doing" from "I can't reach my data."
+- **Track column is blank for shared blocks, 'Upper' / 'Lower' for split ones.** Matches what the data shape actually tells us and avoids inventing an "All" label that isn't in the source.
+- **Known tradeoff — cell wrapping on narrow phones.** "Homeroom & Announcements" wraps onto two lines on sub-400px viewports. Time column `vertical-align: top` keeps the time aligned to the first line. Readable, not fixed in v1. If a real student complains, candidates are: truncate with ellipsis, add a `white-space: nowrap` media query, or rename the block in the sheet.
+- **`width: 1%` trick on time and track columns.** Shrinks those columns to their content width and lets the block name column take the remaining space. Standard CSS table technique; looks hacky but is the right tool.
+- **Not extracted to a shared module.** `formatTimeOfDay`, `relativeTimeAgo`, `DATE_FMT`, and `renderValidity` are duplicated between `app.js` and `schedule-view.js`. Intentional — see the `schedule-view.js` Core Module note above.
+
+### Phase 4: PWA shell — ✅ COMPLETE
+
+1. ✅ `manifest.json` with theme color, scope, display, icons (icon files referenced but not yet created — tracked as follow-up)
+2. ✅ `sw.js` with network-first for HTML, stale-while-revalidate for static same-origin assets
+3. ✅ Offline reload works — app shell served from SW cache, `data.js` falls back to `localStorage`, trust state reads as Stale when cache is >12h old
+
+**Ship criterion:** ✅ MET on 2026-04-20. Verified sequence: SW registered and activated (`registration.active === ServiceWorker`), precache populated with 11 entries in `mdtoday-v1.0.0`, offline reload served cached shell and rendered `MONDAY GRAY` from localStorage with Confirmed trust state, offline reload with manually-aged `lastFetch` (13h old) rendered Stale banner with "Last updated 13h ago" exactly as spec'd.
+
+**Not yet done:** icon files (`icons/icon-192.png`, `icons/icon-512.png`, `icons/apple-touch-icon.png`); iOS Add-to-Home-Screen test (gated on icons existing).
+
+### Phase 4 implementation notes
+
+- **Cache name versioning is the deploy safety mechanism.** `CACHE_NAME = 'mdtoday-v1.0.0'` at the top of `sw.js`. The activate handler deletes any old `mdtoday-*` caches, so bumping this constant on deploy is the one-line fix for Failure mode 7 ("bad deploy cached, now stuck"). **The cache name must be bumped in lockstep with the footer version string in both HTML files** — manual discipline, no automation in v1. Forgetting this means a new deploy reuses the old cache and the fix doesn't propagate.
+- **Same-origin only.** The SW's `fetch` handler ignores any request whose `url.origin !== self.location.origin`. This means iCal via corsproxy.io and the Google Sheet CSVs pass through untouched. `data.js` keeps owning its localStorage cache of those responses; doubling up in the SW would create stale-overlapping-stale bugs with two independent TTLs and two independent invalidation rules.
+- **`skipWaiting()` + `clients.claim()`** are used so new SW versions activate immediately instead of waiting for all tabs to close. Faster update propagation at the cost of some risk of two controllers racing during activation. Accepted for this app because there's no shared mutable state across tabs.
+- **`cache: 'reload'` on install.** `cache.addAll(PRECACHE_URLS.map(url => new Request(url, { cache: 'reload' })))` bypasses the browser HTTP cache during the install fetch, so a new SW version doesn't precache stale bytes that the HTTP layer is still within its TTL on.
+- **SW registration is deliberately not a module.** The `<script>` block in each HTML file is a plain synchronous script, not `type="module"`. This is because SW registration should work on every browser including ones with flaky ES-module support, and registration has no module dependencies. Keep it that way.
+- **The Stale-vs-Confirmed offline distinction is the whole point.** The SW by itself just serves the app shell — it doesn't care about trust state. The trust state is produced by `data.js` + `resolve.js` based on `lastFetch` freshness. Two layers of caching (SW for shell, localStorage for data), each with its own lifecycle. The test that matters is: "offline with stale localStorage cache → Stale banner visible." That's what 2026-04-20's cache-aging shim confirmed.
 
 ### Phase 5: Days Off + polish
 
@@ -872,6 +914,7 @@ These emerged during implementation and are worth logging so future sessions kno
 12. **Update this `claude.md` file at the end of each session** with notable changes, gotchas, and new conventions.
 13. **Every implementation decision is either preserving or weakening the core invariant** ("every display state includes both the schedule and its confidence level"). If a change doesn't preserve it, don't make the change — even if it looks nicer, feels cleaner, or saves code. The invariant is load-bearing; the rest is details.
 14. **When debugging module-loading weirdness in Safari, empty the cache.** `Develop → Empty Caches` (or `Cmd+Option+E`) before assuming the code is wrong. Safari aggressively caches ES modules between edits, and `Cmd+Shift+R` does not always clear them. Lost ~20 minutes of Phase 2 debugging to this once; symptom was "page stuck on LOADING… but no console errors, and `import('./js/app.js')` in console succeeds." If the file on disk is correct and `wc -l` confirms it's non-empty, the problem is Safari's cache, not the code.
+15. **"Phase N says create file X" in the spec ≠ "file X does not exist on disk."** Empty stub files are common in early-phase scaffolding (this has happened at least twice — `countdown.js` before Phase 2's correction, `sw.js` + `manifest.json` before Phase 4). Before any phase that introduces new files, run `ls -la` or `git ls-files` + `wc -l` on each named target. "Create X" in the spec means "fill X," not "assume X doesn't exist." The consequence of assuming wrong is overwriting real work with no recovery path.
 
 ---
 
