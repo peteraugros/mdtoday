@@ -246,7 +246,8 @@ function renderValidity(resolvedLike, payload) {
       el.classList.add('is-visible', 'is-offline');
       els.validityIcon.textContent = '⊘';
       els.validityTitle.textContent = 'MD Today is offline';
-      els.validityDetail.textContent = 'Check with the front office.';
+      els.validityDetail.innerHTML =
+        'Check the official site at <a href="https://materdei.org" target="_blank" rel="noopener">materdei.org</a>';
       return;
 
     // No 'assumed' case for this view — "assumed" is a today-specific

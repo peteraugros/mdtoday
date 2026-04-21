@@ -390,14 +390,16 @@ async function fetchIcal(url) {
         if (next.compare(icalStart) < 0) continue;
         if (next.compare(icalEnd) > 0) break;
         const dateStr = `${next.year}-${String(next.month).padStart(2, '0')}-${String(next.day).padStart(2, '0')}`;
-        simplified.push({ date: dateStr, summary, description });
+        const timeStr = next.isDate ? null : `${String(next.hour).padStart(2, '0')}:${String(next.minute).padStart(2, '0')}`;
+        simplified.push({ date: dateStr, summary, description, time: timeStr });
       }
     } else {
       // Non-recurring event — emit once using startDate
       const start = event.startDate;
       if (!start) continue;
       const dateStr = `${start.year}-${String(start.month).padStart(2, '0')}-${String(start.day).padStart(2, '0')}`;
-      simplified.push({ date: dateStr, summary, description });
+      const timeStr = start.isDate ? null : `${String(start.hour).padStart(2, '0')}:${String(start.minute).padStart(2, '0')}`;
+      simplified.push({ date: dateStr, summary, description, time: timeStr });
     }
   }
 

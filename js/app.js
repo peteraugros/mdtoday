@@ -1,10 +1,12 @@
-// js/app.js
+// js/app.js — v2
 //
-// View orchestration — mounts the three DOM regions on first load, then hands
-// each region to its renderer. The countdown tick (later step) updates only
-// the temporal region; validity and deviation stay mounted and stable.
+// Now view orchestration. The Now view IS the schedule view.
+// Layout (top to bottom):
+//   1. Announcement banner (if present)
+//   2. Template name + countdown timer
+//   3. Full day's schedule blocks (current highlighted, past dimmed)
 //
-// See claude.md → "Core Modules → js/app.js".
+// Personal schedule overlay reads from localStorage and applies automatically.
 
 import { loadData, isFresh } from './data.js';
 import { resolveDay } from './resolve.js';
@@ -25,24 +27,44 @@ const els = {
   validityTitle: $('validity-title'),
   validityDetail: $('validity-detail'),
 
-  temporal: $('temporal'),
-  dayLabel: $('day-label'),
-  statusText: $('status-text'),
-  countdownText: $('countdown-text'),
-
-  tracks: $('tracks'),
-  trackUpperBlock: $('track-upper-block'),
-  trackUpperTime: $('track-upper-time'),
-  trackLowerBlock: $('track-lower-block'),
-  trackLowerTime: $('track-lower-time'),
-
-  nextSlot: $('next-slot'),
-  nextBlockName: $('next-block-name'),
-  nextBlockTime: $('next-block-time'),
-
   deviation: $('deviation'),
   deviationText: $('deviation-text'),
+
+  dayLabel: $('day-label'),
+  countdownText: $('countdown-text'),
+
+  blocksList: $('blocks-list'),
+  nowEmpty: $('now-empty'),
+  nowEmptyText: $('now-empty-text'),
+
+  personalizeSection: $('personalize-section'),
+  personalizeBtn: $('personalize-btn'),
 };
+
+// ---------------------------------------------------------------------------
+// Personal schedule — localStorage
+// ---------------------------------------------------------------------------
+
+const PERSONAL_KEY = 'mdtoday_personal_schedule';
+
+function loadPersonalSchedule() {
+  try {
+    const raw = localStorage.getItem(PERSONAL_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch { return null; }
+}
+
+function savePersonalSchedule(data) {
+  try {
+    if (data && Object.keys(data).length > 0) {
+      localStorage.setItem(PERSONAL_KEY, JSON.stringify(data));
+    } else {
+      localStorage.removeItem(PERSONAL_KEY);
+    }
+  } catch (e) {
+    console.warn('[app] personal schedule save failed:', e);
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Formatters
@@ -51,17 +73,6 @@ const els = {
 const DATE_FMT = new Intl.DateTimeFormat('en-US', {
   weekday: 'long', month: 'long', day: 'numeric',
 });
-
-function formatSeconds(seconds) {
-  if (seconds == null || seconds < 0) return '';
-  const m = Math.floor(seconds / 60);
-  const s = Math.floor(seconds % 60);
-  if (m === 0) return `${s}s`;
-  if (m < 60) return `${m}m ${String(s).padStart(2, '0')}s`;
-  const h = Math.floor(m / 60);
-  const mm = m % 60;
-  return `${h}h ${String(mm).padStart(2, '0')}m`;
-}
 
 function formatTimeOfDay(hhmm) {
   if (!hhmm) return '';
@@ -83,6 +94,33 @@ function relativeTimeAgo(iso) {
   return `${days}d ago`;
 }
 
+function timeToMinutes(hhmm) {
+  const [h, m] = hhmm.split(':').map(n => parseInt(n, 10));
+  return h * 60 + m;
+}
+
+/**
+ * Extract block number from block_name (e.g., "Block 1" → "1", "Upper Lunch" → null).
+ */
+function extractBlockNumber(blockName) {
+  const match = blockName.match(/^Block\s+(\d)/i);
+  return match ? match[1] : null;
+}
+
+/**
+ * Enhance day label with block number reinforcement.
+ * "Red Day" + "RED: B. 1, 3, 5, 7" → "Red Day (Blocks 1, 3, 5, 7)"
+ */
+function enhanceDayLabel(label, summary) {
+  if (!summary) return label;
+  const blockMatch = summary.match(/B\.\s*([\d,\s]+)$/);
+  if (blockMatch) {
+    const blocks = blockMatch[1].trim();
+    return `${label} (Blocks ${blocks})`;
+  }
+  return label;
+}
+
 // ---------------------------------------------------------------------------
 // Render: validity region
 // ---------------------------------------------------------------------------
@@ -97,7 +135,7 @@ function renderValidity(resolved, payload) {
 
     case 'stale':
       el.classList.add('is-visible', 'is-stale');
-      els.validityIcon.textContent = '⚠';
+      els.validityIcon.textContent = '\u26A0';
       els.validityTitle.textContent = 'Showing cached schedule';
       els.validityDetail.textContent = `Last updated ${relativeTimeAgo(payload.lastFetch)}`;
       return;
@@ -106,153 +144,301 @@ function renderValidity(resolved, payload) {
       el.classList.add('is-visible', 'is-assumed');
       els.validityIcon.textContent = '?';
       els.validityTitle.textContent = 'Schedule assumed';
-      els.validityDetail.textContent = 'No matching event for today — confirm with your teacher.';
+      els.validityDetail.textContent = 'No matching event for today \u2014 confirm with your teacher.';
       return;
 
     case 'offline':
       el.classList.add('is-visible', 'is-offline');
-      els.validityIcon.textContent = '⊘';
+      els.validityIcon.textContent = '\u2298';
       els.validityTitle.textContent = 'MD Today is offline';
-      els.validityDetail.textContent = 'Check with the front office for today\'s schedule.';
+      els.validityDetail.innerHTML =
+        'Check the official site at <a href="https://materdei.org" target="_blank" rel="noopener">materdei.org</a>';
       return;
   }
 }
 
 // ---------------------------------------------------------------------------
-// Render: deviation region (announcement)
+// Render: deviation (announcement)
 // ---------------------------------------------------------------------------
 
 function renderDeviation(resolved) {
-  const el = els.deviation;
   if (resolved.announcement) {
-    el.classList.add('is-visible');
+    els.deviation.classList.add('is-visible');
     els.deviationText.textContent = resolved.announcement;
   } else {
-    el.classList.remove('is-visible');
+    els.deviation.classList.remove('is-visible');
     els.deviationText.textContent = '';
   }
 }
 
 // ---------------------------------------------------------------------------
-// Render: temporal region
+// Render: block list
 // ---------------------------------------------------------------------------
 
-function renderTemporal(resolved, status) {
-  els.dayLabel.textContent = resolved.dayLabel || '';
+// Stored references for tick updates
+let blockElements = []; // { block, element }
 
-  if (resolved.isDayOff) {
-    els.statusText.textContent = 'No school today';
-    els.statusText.classList.add('temporal__status--muted');
-    els.countdownText.textContent = resolved.dayOffLabel || '';
-    els.tracks.hidden = true;
-    els.nextSlot.hidden = true;
-    els.temporal.classList.remove('temporal--branched');
-    return;
+function renderBlocks(template, personal) {
+  const list = els.blocksList;
+  list.innerHTML = '';
+  blockElements = [];
+
+  if (!template || !template.blocks || template.blocks.length === 0) return;
+
+  for (const block of template.blocks) {
+    const li = document.createElement('li');
+    li.className = 'now-block';
+
+    // Time column
+    const timeDiv = document.createElement('div');
+    timeDiv.className = 'now-block__time';
+    timeDiv.textContent = `${formatTimeOfDay(block.start_time)} \u2013 ${formatTimeOfDay(block.end_time)}`;
+
+    // Info column
+    const infoDiv = document.createElement('div');
+    infoDiv.className = 'now-block__info';
+
+    const blockNum = extractBlockNumber(block.block_name);
+    const personalData = blockNum && personal ? personal[blockNum] : null;
+
+    const nameDiv = document.createElement('div');
+    nameDiv.className = 'now-block__name';
+
+    if (personalData && personalData.name) {
+      // Personal overlay: class name primary, block + room secondary
+      nameDiv.textContent = personalData.name;
+      const metaDiv = document.createElement('div');
+      metaDiv.className = 'now-block__meta';
+      const parts = [`Block ${blockNum}`];
+      if (personalData.room) parts.push(`Room ${personalData.room}`);
+      metaDiv.textContent = parts.join(' \u00B7 ');
+      infoDiv.appendChild(nameDiv);
+      infoDiv.appendChild(metaDiv);
+    } else {
+      // Default: block name only
+      nameDiv.textContent = block.block_name;
+      infoDiv.appendChild(nameDiv);
+    }
+
+    // Track label for branched blocks
+    if (block.track) {
+      li.classList.add(`now-block--${block.track}`);
+      const trackDiv = document.createElement('div');
+      trackDiv.className = 'now-block__track';
+      trackDiv.textContent = block.track === 'upper' ? 'Upper' : 'Lower';
+      infoDiv.appendChild(trackDiv);
+    }
+
+    li.appendChild(timeDiv);
+    li.appendChild(infoDiv);
+    list.appendChild(li);
+
+    blockElements.push({ block, element: li });
   }
+}
 
-  if (!resolved.template) {
-    els.statusText.textContent = 'Schedule unavailable';
-    els.statusText.classList.add('temporal__status--muted');
+// ---------------------------------------------------------------------------
+// Tick: temporal update (every second)
+// ---------------------------------------------------------------------------
+
+function tickTemporal(now) {
+  if (!currentResolved) return;
+
+  // Day-off or no template — static display, no tick updates needed
+  if (currentResolved.isDayOff || !currentResolved.template) {
     els.countdownText.textContent = '';
-    els.tracks.hidden = true;
-    els.nextSlot.hidden = true;
-    els.temporal.classList.remove('temporal--branched');
+    els.countdownText.classList.remove('now-header__countdown--active');
     return;
   }
 
-  els.statusText.classList.remove('temporal__status--muted');
+  const status = getCurrentStatus(currentResolved.template, now);
+  const nowMin = now.getHours() * 60 + now.getMinutes() + now.getSeconds() / 60;
 
-  switch (status.status) {
-    case 'before':
-      els.statusText.textContent = 'Before school';
-      els.countdownText.textContent =
-        `Starts in ${formatSeconds(status.secondsToNextTransition)}`;
-      els.tracks.hidden = true;
-      els.temporal.classList.remove('temporal--branched');
-      showNext(status.nextBlock);
-      break;
+  // Update block highlighting
+  for (const { block, element } of blockElements) {
+    const start = timeToMinutes(block.start_time);
+    const end = timeToMinutes(block.end_time);
 
-    case 'after':
-      els.statusText.textContent = 'School\'s out';
-      els.statusText.classList.add('temporal__status--muted');
-      els.countdownText.textContent = '';
-      els.tracks.hidden = true;
-      els.nextSlot.hidden = true;
-      els.temporal.classList.remove('temporal--branched');
-      break;
-
-    case 'passing':
-      els.statusText.textContent = 'Passing period';
-      els.countdownText.textContent =
-        `Next in ${formatSeconds(status.secondsToNextTransition)}`;
-      els.tracks.hidden = true;
-      els.temporal.classList.remove('temporal--branched');
-      showNext(status.nextBlock);
-      break;
-
-    case 'period':
-      if (status.currentTracks) {
-        els.statusText.textContent = 'Lunch window';
-        els.countdownText.textContent =
-          `Next change in ${formatSeconds(status.secondsToNextTransition)}`;
-        els.tracks.hidden = false;
-        els.temporal.classList.add('temporal--branched');
-
-        els.trackUpperBlock.textContent = status.currentTracks.upper.block_name;
-        els.trackUpperTime.textContent =
-          `${formatTimeOfDay(status.currentTracks.upper.start_time)} – ${formatTimeOfDay(status.currentTracks.upper.end_time)}`;
-
-        els.trackLowerBlock.textContent = status.currentTracks.lower.block_name;
-        els.trackLowerTime.textContent =
-          `${formatTimeOfDay(status.currentTracks.lower.start_time)} – ${formatTimeOfDay(status.currentTracks.lower.end_time)}`;
-
-        showNext(status.nextBlock);
-      } else {
-        els.statusText.textContent = status.currentBlock.block_name;
-        els.countdownText.textContent =
-          `Ends in ${formatSeconds(status.secondsToNextTransition)}`;
-        els.tracks.hidden = true;
-        els.temporal.classList.remove('temporal--branched');
-        showNext(status.nextBlock);
-      }
-      break;
+    element.classList.remove('is-past', 'is-current');
+    if (nowMin >= end) {
+      element.classList.add('is-past');
+    } else if (nowMin >= start) {
+      element.classList.add('is-current');
+    }
   }
-}
 
-function showNext(nextBlock) {
-  if (!nextBlock) {
-    els.nextSlot.hidden = true;
-    return;
+  // Update countdown
+  if (status.status === 'after') {
+    els.countdownText.textContent = 'School day complete';
+    els.countdownText.classList.remove('now-header__countdown--active');
+  } else if (status.secondsToNextTransition != null) {
+    const totalSeconds = Math.max(0, Math.ceil(status.secondsToNextTransition));
+    const mins = Math.ceil(totalSeconds / 60);
+    if (status.status === 'period' && !status.nextBlock && !status.currentTracks) {
+      // Last block of the day — count down to end
+      els.countdownText.textContent = mins === 1
+        ? '1 minute remaining'
+        : `${mins} minutes remaining`;
+    } else {
+      els.countdownText.textContent = mins === 1
+        ? '1 minute until next block'
+        : `${mins} minutes until next block`;
+    }
+    els.countdownText.classList.add('now-header__countdown--active');
   }
-  els.nextSlot.hidden = false;
-  els.nextBlockName.textContent = nextBlock.block_name;
-  els.nextBlockTime.textContent = ` · ${formatTimeOfDay(nextBlock.start_time)}`;
 }
 
 // ---------------------------------------------------------------------------
-// Top-level render
+// Top-level state + render
 // ---------------------------------------------------------------------------
 
 let currentPayload = null;
 let currentResolved = null;
 
-// Stable render — runs once per data load. Paints validity, deviation, and
-// the header date. Does NOT paint the temporal region (tickTemporal owns that).
 function renderStable(now) {
   els.headerDate.textContent = DATE_FMT.format(now);
   currentResolved = resolveDay(currentPayload, now);
+
   renderValidity(currentResolved, currentPayload);
   renderDeviation(currentResolved);
+
+  // Day-off state
+  if (currentResolved.isDayOff) {
+    els.dayLabel.textContent = currentResolved.dayOffLabel || 'No school today';
+    els.blocksList.innerHTML = '';
+    blockElements = [];
+    showEmpty('No school today.');
+    els.personalizeSection.hidden = true;
+    return;
+  }
+
+  // Offline / no template
+  if (!currentResolved.template) {
+    const label = currentResolved.dayLabel || '';
+    els.dayLabel.textContent = label;
+    els.blocksList.innerHTML = '';
+    blockElements = [];
+    if (currentResolved.trustState === 'offline') {
+      showEmpty('Schedule unavailable. Check the official site at materdei.org');
+    } else {
+      showEmpty('No schedule on file for today.');
+    }
+    els.personalizeSection.hidden = true;
+    return;
+  }
+
+  // Normal schedule
+  els.nowEmpty.hidden = true;
+
+  // Build enhanced day label
+  const rawSummary = currentResolved.unmatchedSummary || findScheduleSummary();
+  const label = enhanceDayLabel(
+    currentResolved.dayLabel || '',
+    rawSummary
+  );
+  els.dayLabel.textContent = label;
+
+  const personal = loadPersonalSchedule();
+  renderBlocks(currentResolved.template, personal);
+  els.personalizeSection.hidden = false;
 }
 
-// Temporal-only render — runs every second from countdown.js. Re-uses
-// currentResolved (set by renderStable); only recomputes status.
-function tickTemporal(now) {
-  if (!currentResolved) return;
-  const status = currentResolved.template
-    ? getCurrentStatus(currentResolved.template, now)
-    : { status: 'after', currentBlock: null, currentTracks: null, nextBlock: null, secondsToNextTransition: null };
-  renderTemporal(currentResolved, status);
+function showEmpty(message) {
+  els.nowEmpty.hidden = false;
+  els.nowEmptyText.textContent = message;
+  els.blocksList.innerHTML = '';
+  blockElements = [];
+}
+
+/**
+ * Find the raw schedule SUMMARY for today from the payload events.
+ * Used for day-label block-number reinforcement.
+ */
+function findScheduleSummary() {
+  if (!currentPayload || !currentPayload.events || !currentPayload.summaryMap) return null;
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, '0');
+  const d = String(now.getDate()).padStart(2, '0');
+  const todayStr = `${y}-${m}-${d}`;
+
+  const summarySet = new Set(currentPayload.summaryMap.map(r => r.calendar_summary));
+  const event = currentPayload.events.find(e => e.date === todayStr && summarySet.has(e.summary));
+  return event ? event.summary : null;
+}
+
+// ---------------------------------------------------------------------------
+// Edit panel (personalize schedule)
+// ---------------------------------------------------------------------------
+
+function initEditPanel() {
+  if (!els.personalizeBtn) return;
+  els.personalizeBtn.addEventListener('click', toggleEditPanel);
+}
+
+function toggleEditPanel() {
+  const existing = document.getElementById('edit-panel');
+  if (existing) {
+    existing.remove();
+    return;
+  }
+
+  const personal = loadPersonalSchedule() || {};
+
+  const panel = document.createElement('div');
+  panel.id = 'edit-panel';
+  panel.className = 'edit-panel';
+
+  panel.innerHTML = `
+    <h3 class="edit-panel__heading">Personalize Schedule</h3>
+    <p class="edit-panel__note">Saved on this device only</p>
+    <div class="edit-panel__form">
+      ${[1,2,3,4,5,6,7,8].map(i => `
+        <div class="edit-panel__row">
+          <label class="edit-panel__label">Block ${i}</label>
+          <input class="edit-panel__input" type="text" placeholder="Class name"
+                 data-block="${i}" data-field="name" value="${personal[i]?.name || ''}">
+          <input class="edit-panel__input edit-panel__input--room" type="text" placeholder="Room"
+                 data-block="${i}" data-field="room" value="${personal[i]?.room || ''}">
+        </div>
+      `).join('')}
+    </div>
+    <div class="edit-panel__actions">
+      <button class="edit-panel__save" type="button">Save</button>
+      <button class="edit-panel__reset" type="button">Reset Schedule</button>
+      <button class="edit-panel__cancel" type="button">Cancel</button>
+    </div>
+  `;
+
+  panel.querySelector('.edit-panel__save').addEventListener('click', () => {
+    const data = {};
+    for (let i = 1; i <= 8; i++) {
+      const name = panel.querySelector(`[data-block="${i}"][data-field="name"]`).value.trim();
+      const room = panel.querySelector(`[data-block="${i}"][data-field="room"]`).value.trim();
+      if (name || room) data[i] = { name, room };
+    }
+    savePersonalSchedule(data);
+    panel.remove();
+    if (currentResolved && currentResolved.template) {
+      renderBlocks(currentResolved.template, loadPersonalSchedule());
+      tickTemporal(new Date());
+    }
+  });
+
+  panel.querySelector('.edit-panel__reset').addEventListener('click', () => {
+    savePersonalSchedule(null);
+    panel.remove();
+    if (currentResolved && currentResolved.template) {
+      renderBlocks(currentResolved.template, null);
+      tickTemporal(new Date());
+    }
+  });
+
+  panel.querySelector('.edit-panel__cancel').addEventListener('click', () => {
+    panel.remove();
+  });
+
+  els.personalizeSection.parentNode.insertBefore(panel, els.personalizeSection);
 }
 
 // ---------------------------------------------------------------------------
@@ -265,10 +451,9 @@ async function boot() {
   renderStable(now);
   tickTemporal(now);
   startCountdown(tickTemporal, onLongResume);
+  initEditPanel();
 }
 
-// Long-resume (>1h tab hidden) — refresh data and re-run stable render, then
-// let countdown.js restart its interval via startCountdown.
 async function onLongResume() {
   currentPayload = await loadData();
   const now = new Date();

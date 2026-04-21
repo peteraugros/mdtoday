@@ -1,12 +1,12 @@
 /* ===========================================================================
-   MD Today — styles
+   MD Today v2 — styles
    ---------------------------------------------------------------------------
    Mobile-first. System font stack. No framework.
    Design tokens live in :root and drive everything downstream.
    ========================================================================= */
 
    :root {
-    /* --- Colors (see claude.md → Design System) --- */
+    /* --- Colors --- */
     --md-red: #B71C1C;
     --md-white: #FFFFFF;
     --md-gray-bg: #F5F5F5;
@@ -19,10 +19,10 @@
     --md-warn: #F57F17;
     --md-uncertain: #6A1B9A;
     --md-offline: #424242;
-  
-    /* --- Trust state accent (dynamic — set by render.js) --- */
+
+    /* --- Trust state accent (dynamic) --- */
     --trust-accent: transparent;
-  
+
     /* --- Sizing --- */
     --font-base: 18px;
     --content-max: 480px;
@@ -33,46 +33,46 @@
     --spacing-md: 16px;
     --spacing-lg: 24px;
     --spacing-xl: 32px;
-  
+
     /* --- Typography --- */
     --font-stack: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
                   "Helvetica Neue", Arial, sans-serif;
   }
-  
+
   /* ---------------------------------------------------------------------------
      Reset + base
      ------------------------------------------------------------------------- */
-  
+
   *, *::before, *::after {
     box-sizing: border-box;
     margin: 0;
     padding: 0;
   }
-  
+
   html {
     font-size: var(--font-base);
     -webkit-text-size-adjust: 100%;
     -webkit-tap-highlight-color: transparent;
   }
-  
+
   body {
     font-family: var(--font-stack);
     color: var(--md-gray-text);
     background: var(--md-gray-bg);
     line-height: 1.4;
     min-height: 100vh;
-    padding: var(--spacing-md) var(--spacing-md) calc(var(--spacing-xl) + 64px + env(safe-area-inset-bottom));
+    padding: var(--spacing-md) var(--spacing-md) calc(var(--spacing-xl) + 72px + env(safe-area-inset-bottom));
   }
-  
+
   /* ---------------------------------------------------------------------------
      Page layout
      ------------------------------------------------------------------------- */
-  
+
   .page {
     max-width: var(--content-max);
     margin: 0 auto;
   }
-  
+
   .page-header {
     display: flex;
     justify-content: space-between;
@@ -81,7 +81,7 @@
     border-bottom: 1px solid var(--md-gray-border);
     margin-bottom: var(--spacing-lg);
   }
-  
+
   .page-header__brand {
     display: flex;
     align-items: center;
@@ -94,192 +94,14 @@
 
   .page-header__logo {
     height: 28px;
-    width: auto;  /* preserve aspect ratio — wordmark is wider than tall */
+    width: auto;
     display: block;
   }
-  
+
   .page-header__date {
     font-size: 0.875rem;
     color: var(--md-gray-text-muted);
   }
-  
-  /* ---------------------------------------------------------------------------
-     Three-layer Now view regions
-     ---------------------------------------------------------------------------
-     These three regions are independent DOM + render lifecycles.
-     See claude.md → "The three-layer model".
-     ------------------------------------------------------------------------- */
-  
-  .now {
-    display: flex;
-    flex-direction: column;
-    gap: var(--spacing-md);
-  }
-  
-  /* --- Validity region (trust state banner; hidden when Confirmed) --- */
-  
-  .validity {
-    display: none;                                /* hidden by default (Confirmed) */
-    padding: var(--spacing-md);
-    border-radius: var(--radius);
-    border-left: 4px solid var(--trust-accent);
-    background: var(--md-gray-surface);
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
-  }
-  
-  .validity.is-visible {
-    display: flex;
-    gap: var(--spacing-md);
-    align-items: flex-start;
-  }
-  
-  .validity__icon {
-    font-size: 1.5rem;
-    line-height: 1;
-    flex-shrink: 0;
-  }
-  
-  .validity__body {
-    flex: 1;
-    min-width: 0;
-  }
-  
-  .validity__title {
-    font-weight: 700;
-    font-size: 1rem;
-    margin-bottom: 2px;
-  }
-  
-  .validity__detail {
-    font-size: 0.875rem;
-    color: var(--md-gray-text-muted);
-  }
-  
-  /* Trust state variants */
-  
-  .validity.is-stale      { --trust-accent: var(--md-warn); }
-  .validity.is-assumed    { --trust-accent: var(--md-uncertain); }
-  .validity.is-offline    { --trust-accent: var(--md-offline); }
-  
-  .validity.is-stale .validity__icon      { color: var(--md-warn); }
-  .validity.is-assumed .validity__icon    { color: var(--md-uncertain); }
-  .validity.is-offline .validity__icon    { color: var(--md-offline); }
-  
-  /* --- Temporal region (the main event: current period + countdown) --- */
-  
-  .temporal {
-    background: var(--md-gray-surface);
-    border-radius: var(--radius);
-    padding: var(--spacing-lg);
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
-  }
-  
-  .temporal__day-label {
-    font-size: 0.875rem;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    color: var(--md-gray-text-muted);
-    margin-bottom: var(--spacing-sm);
-  }
-  
-  .temporal__status {
-    font-size: 2rem;
-    font-weight: 700;
-    line-height: 1.1;
-    margin-bottom: var(--spacing-sm);
-  }
-  
-  .temporal__status--muted {
-    color: var(--md-gray-text-muted);
-    font-weight: 500;
-  }
-  
-  .temporal__countdown {
-    font-size: 1.25rem;
-    color: var(--md-gray-text-muted);
-    font-variant-numeric: tabular-nums;  /* stops the countdown from jittering */
-  }
-  
-  .temporal__next {
-    margin-top: var(--spacing-md);
-    padding-top: var(--spacing-md);
-    border-top: 1px solid var(--md-gray-border);
-    font-size: 0.9375rem;
-    color: var(--md-gray-text-muted);
-  }
-  
-  .temporal__next strong {
-    color: var(--md-gray-text);
-    font-weight: 600;
-  }
-  
-  /* Track-branching variant (lunch window) */
-  
-  .temporal--branched .temporal__tracks {
-    display: grid;
-    grid-template-columns: 1fr;
-    gap: var(--spacing-md);
-    margin-top: var(--spacing-sm);
-  }
-  
-  .track {
-    padding: var(--spacing-md);
-    border-radius: calc(var(--radius) - 4px);
-    background: var(--md-gray-bg);
-  }
-  
-  .track__label {
-    font-size: 0.75rem;
-    text-transform: uppercase;
-    letter-spacing: 0.1em;
-    color: var(--md-gray-text-muted);
-    margin-bottom: 4px;
-  }
-  
-  .track__block {
-    font-size: 1.25rem;
-    font-weight: 600;
-  }
-  
-  .track__time {
-    font-size: 0.875rem;
-    color: var(--md-gray-text-muted);
-    font-variant-numeric: tabular-nums;
-    margin-top: 2px;
-  }
-  
-  /* --- Deviation region (announcement banner; hidden when empty) --- */
-  
-  .deviation {
-    display: none;
-    padding: var(--spacing-md);
-    border-radius: var(--radius);
-    background: var(--md-accent);
-    color: var(--md-white);
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
-  }
-  
-  .deviation.is-visible {
-    display: flex;
-    gap: var(--spacing-md);
-    align-items: flex-start;
-  }
-  
-  .deviation__icon {
-    font-size: 1.25rem;
-    flex-shrink: 0;
-  }
-  
-  .deviation__text {
-    flex: 1;
-    font-size: 1rem;
-    font-weight: 500;
-    line-height: 1.3;
-  }
-  
-  /* ---------------------------------------------------------------------------
-     Version string (under header)
-     ------------------------------------------------------------------------- */
 
   .page-version {
     text-align: right;
@@ -291,99 +113,456 @@
   }
 
   /* ---------------------------------------------------------------------------
-     Schedule view
-     ---------------------------------------------------------------------------
-     Static table. No interactivity, no now-highlighting — paints once.
-     Reuses .validity from the Now view.
+     Validity region (trust state banner; hidden when Confirmed)
+     Shared across all views.
      ------------------------------------------------------------------------- */
 
-  .schedule {
+  .validity {
+    display: none;
+    padding: var(--spacing-md);
+    border-radius: var(--radius);
+    border-left: 4px solid var(--trust-accent);
+    background: var(--md-gray-surface);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  }
+
+  .validity.is-visible {
+    display: flex;
+    gap: var(--spacing-md);
+    align-items: flex-start;
+  }
+
+  .validity__icon {
+    font-size: 1.5rem;
+    line-height: 1;
+    flex-shrink: 0;
+  }
+
+  .validity__body {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .validity__title {
+    font-weight: 700;
+    font-size: 1rem;
+    margin-bottom: 2px;
+  }
+
+  .validity__detail {
+    font-size: 0.875rem;
+    color: var(--md-gray-text-muted);
+  }
+
+  .validity__detail a {
+    color: inherit;
+    text-decoration: underline;
+  }
+
+  .validity.is-stale      { --trust-accent: var(--md-warn); }
+  .validity.is-assumed    { --trust-accent: var(--md-uncertain); }
+  .validity.is-offline    { --trust-accent: var(--md-offline); }
+
+  .validity.is-stale .validity__icon      { color: var(--md-warn); }
+  .validity.is-assumed .validity__icon    { color: var(--md-uncertain); }
+  .validity.is-offline .validity__icon    { color: var(--md-offline); }
+
+  /* ---------------------------------------------------------------------------
+     Deviation region (announcement banner; hidden when empty)
+     Shared across Now view.
+     ------------------------------------------------------------------------- */
+
+  .deviation {
+    display: none;
+    padding: var(--spacing-md);
+    border-radius: var(--radius);
+    background: var(--md-accent);
+    color: var(--md-white);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  }
+
+  .deviation.is-visible {
+    display: flex;
+    gap: var(--spacing-md);
+    align-items: flex-start;
+  }
+
+  .deviation__icon {
+    font-size: 1.25rem;
+    flex-shrink: 0;
+  }
+
+  .deviation__text {
+    flex: 1;
+    font-size: 1rem;
+    font-weight: 500;
+    line-height: 1.3;
+  }
+
+  /* ---------------------------------------------------------------------------
+     Now view — v2
+     Layout: announcement → day label + countdown → full block list
+     ------------------------------------------------------------------------- */
+
+  .now {
     display: flex;
     flex-direction: column;
     gap: var(--spacing-md);
   }
 
-  .schedule-card {
+  /* --- Now header: day label + countdown --- */
+
+  .now-header {
     background: var(--md-gray-surface);
     border-radius: var(--radius);
     padding: var(--spacing-lg);
     box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
   }
 
-  .schedule-card__day-label {
+  .now-header__label {
     font-size: 0.875rem;
     text-transform: uppercase;
     letter-spacing: 0.08em;
     color: var(--md-gray-text-muted);
-    margin-bottom: var(--spacing-md);
+    margin-bottom: var(--spacing-sm);
   }
 
-  .schedule-empty {
-    padding: var(--spacing-md) 0;
-    font-size: 1rem;
+  .now-header__countdown {
+    font-size: 1.5rem;
+    font-weight: 700;
     color: var(--md-gray-text-muted);
-  }
-
-  .schedule-table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 0.9375rem;
     font-variant-numeric: tabular-nums;
+    line-height: 1.2;
   }
 
-  .schedule-table thead th {
-    text-align: left;
-    font-size: 0.75rem;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    font-weight: 600;
-    color: var(--md-gray-text-muted);
-    padding: var(--spacing-sm) 0;
+  .now-header__countdown--active {
+    color: var(--md-red);
+  }
+
+  /* --- Block list --- */
+
+  .now-blocks {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    background: var(--md-gray-surface);
+    border-radius: var(--radius);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+    overflow: hidden;
+  }
+
+  .now-block {
+    display: flex;
+    gap: var(--spacing-md);
+    padding: var(--spacing-md) var(--spacing-lg);
     border-bottom: 1px solid var(--md-gray-border);
+    transition: opacity 0.15s ease, background-color 0.15s ease;
   }
 
-  .schedule-table tbody td {
-    padding: var(--spacing-sm) 0;
-    border-bottom: 1px solid var(--md-gray-border);
-    vertical-align: top;
-  }
-
-  .schedule-table tbody tr:last-child td {
+  .now-block:last-child {
     border-bottom: none;
   }
 
-  .schedule-table__time {
-    white-space: nowrap;
-    padding-right: var(--spacing-md) !important;
+  .now-block__time {
+    font-size: 0.8125rem;
     color: var(--md-gray-text-muted);
-    width: 1%;            /* shrinks column to content width */
+    white-space: nowrap;
+    min-width: 0;
+    flex-shrink: 0;
+    padding-top: 2px;
+    font-variant-numeric: tabular-nums;
   }
 
-  .schedule-table__block {
+  .now-block__info {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .now-block__name {
+    font-size: 1rem;
+    font-weight: 500;
     color: var(--md-gray-text);
+  }
+
+  .now-block__meta {
+    font-size: 0.8125rem;
+    color: var(--md-gray-text-muted);
+    margin-top: 1px;
+  }
+
+  .now-block__track {
+    font-size: 0.6875rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--md-gray-text-muted);
+    margin-top: 2px;
+  }
+
+  /* Visual states */
+
+  .now-block.is-current {
+    background: rgba(183, 28, 28, 0.06);
+    border-left: 3px solid var(--md-red);
+    padding-left: calc(var(--spacing-lg) - 3px);
+  }
+
+  .now-block.is-current .now-block__name {
+    color: var(--md-red);
+    font-weight: 700;
+  }
+
+  .now-block.is-past {
+    opacity: 0.4;
+  }
+
+  /* Track variants */
+  .now-block--upper,
+  .now-block--lower {
+    padding-left: calc(var(--spacing-lg) + 8px);
+  }
+
+  /* --- Empty state --- */
+
+  .now-empty {
+    padding: var(--spacing-lg);
+    background: var(--md-gray-surface);
+    border-radius: var(--radius);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  }
+
+  .now-empty__text {
+    font-size: 1rem;
+    color: var(--md-gray-text-muted);
+    text-align: center;
+  }
+
+  /* --- Personalize button --- */
+
+  .now-personalize {
+    text-align: center;
+    padding: var(--spacing-sm) 0;
+  }
+
+  .now-personalize__btn {
+    background: none;
+    border: 1px solid var(--md-gray-border);
+    border-radius: 8px;
+    padding: var(--spacing-sm) var(--spacing-md);
+    font-size: 0.875rem;
+    color: var(--md-gray-text-muted);
+    cursor: pointer;
+    font-family: inherit;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .now-personalize__btn:active {
+    background: var(--md-gray-bg);
+  }
+
+  /* ---------------------------------------------------------------------------
+     Edit panel (personalize schedule)
+     ------------------------------------------------------------------------- */
+
+  .edit-panel {
+    background: var(--md-gray-surface);
+    border-radius: var(--radius);
+    padding: var(--spacing-lg);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  }
+
+  .edit-panel__heading {
+    font-size: 1.125rem;
+    font-weight: 700;
+    margin-bottom: var(--spacing-xs);
+  }
+
+  .edit-panel__note {
+    font-size: 0.8125rem;
+    color: var(--md-gray-text-muted);
+    margin-bottom: var(--spacing-md);
+  }
+
+  .edit-panel__form {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-sm);
+  }
+
+  .edit-panel__row {
+    display: grid;
+    grid-template-columns: 60px 1fr 72px;
+    gap: var(--spacing-sm);
+    align-items: center;
+  }
+
+  .edit-panel__label {
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: var(--md-gray-text-muted);
+  }
+
+  .edit-panel__input {
+    font-family: inherit;
+    font-size: 0.875rem;
+    padding: var(--spacing-sm);
+    border: 1px solid var(--md-gray-border);
+    border-radius: 6px;
+    background: var(--md-gray-bg);
+    color: var(--md-gray-text);
+    min-width: 0;
+  }
+
+  .edit-panel__input:focus {
+    outline: 2px solid var(--md-red);
+    outline-offset: -1px;
+    border-color: transparent;
+  }
+
+  .edit-panel__input::placeholder {
+    color: var(--md-gray-text-muted);
+    opacity: 0.6;
+  }
+
+  .edit-panel__actions {
+    display: flex;
+    gap: var(--spacing-sm);
+    margin-top: var(--spacing-md);
+    flex-wrap: wrap;
+  }
+
+  .edit-panel__save,
+  .edit-panel__reset,
+  .edit-panel__cancel {
+    font-family: inherit;
+    font-size: 0.875rem;
+    padding: var(--spacing-sm) var(--spacing-md);
+    border-radius: 8px;
+    border: none;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .edit-panel__save {
+    background: var(--md-red);
+    color: var(--md-white);
+    font-weight: 600;
+  }
+
+  .edit-panel__reset {
+    background: none;
+    border: 1px solid var(--md-gray-border);
+    color: var(--md-gray-text-muted);
+  }
+
+  .edit-panel__cancel {
+    background: none;
+    color: var(--md-gray-text-muted);
+  }
+
+  /* ---------------------------------------------------------------------------
+     Upcoming view
+     ------------------------------------------------------------------------- */
+
+  .upcoming {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-md);
+  }
+
+  .upcoming__heading {
+    font-size: 1.125rem;
+    font-weight: 700;
+    margin-bottom: var(--spacing-sm);
+  }
+
+  .upcoming-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    background: var(--md-gray-surface);
+    border-radius: var(--radius);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+    overflow: hidden;
+  }
+
+  .upcoming-item {
+    padding: var(--spacing-md) var(--spacing-lg);
+    border-bottom: 1px solid var(--md-gray-border);
+  }
+
+  .upcoming-item:last-child {
+    border-bottom: none;
+  }
+
+  .upcoming-item--tappable {
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .upcoming-item--tappable:active {
+    background: var(--md-gray-bg);
+  }
+
+  .upcoming-item__day {
+    font-size: 0.8125rem;
+    color: var(--md-gray-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-bottom: 2px;
+  }
+
+  .upcoming-item__template {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--md-gray-text);
+  }
+
+  .upcoming-item__template--dayoff {
+    color: var(--md-gray-text-muted);
     font-weight: 500;
   }
 
-  .schedule-table__track {
-    text-align: right;
+  .upcoming-item__template--none {
     color: var(--md-gray-text-muted);
-    font-size: 0.8125rem;
-    padding-left: var(--spacing-sm) !important;
-    white-space: nowrap;
-    width: 1%;
+    font-style: italic;
+    font-weight: 400;
   }
 
-  @media (max-width: 600px) {
-    .schedule-table__track {
-      display: none;
-    }
+  .upcoming-item__announcement {
+    font-size: 0.8125rem;
+    color: var(--md-accent);
+    margin-top: 2px;
+  }
+
+  .upcoming-empty {
+    padding: var(--spacing-lg);
+    background: var(--md-gray-surface);
+    border-radius: var(--radius);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  }
+
+  .upcoming-empty__text {
+    font-size: 1rem;
+    color: var(--md-gray-text-muted);
+    text-align: center;
+  }
+
+  /* --- Detail (drill-in) --- */
+
+  .upcoming-detail__back {
+    background: none;
+    border: none;
+    font-family: inherit;
+    font-size: 0.9375rem;
+    color: var(--md-red);
+    cursor: pointer;
+    padding: var(--spacing-sm) 0;
+    margin-bottom: var(--spacing-sm);
+    -webkit-tap-highlight-color: transparent;
   }
 
   /* ---------------------------------------------------------------------------
      Days Off view
-     ---------------------------------------------------------------------------
-     Static list of upcoming day-off groups. No interactivity. Paints once.
-     Reuses .validity from the Now / Schedule views.
      ------------------------------------------------------------------------- */
 
   .daysoff {
@@ -441,136 +620,187 @@
     font-variant-numeric: tabular-nums;
   }
 
-/* ---------------------------------------------------------------------------
-   Bottom navigation
-   ---------------------------------------------------------------------------
-   Fixed bottom tab bar. Three icon-only links. Replaces the previous footer
-   text links. Active state set per-HTML-file via `is-active` class.
-   ------------------------------------------------------------------------- */
+  /* ---------------------------------------------------------------------------
+     Sports view
+     ------------------------------------------------------------------------- */
 
-.bottomnav {
-  position: fixed;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  display: flex;
-  justify-content: space-around;
-  align-items: stretch;
-  background: var(--md-gray-surface);
-  border-top: 1px solid var(--md-gray-border);
-  box-shadow: 0 -1px 3px rgba(0, 0, 0, 0.04);
-  padding-bottom: env(safe-area-inset-bottom);
-  z-index: 10;
-}
-
-.bottomnav__item {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: var(--touch-min);
-  padding: var(--spacing-sm) 0;
-  color: var(--md-gray-text-muted);
-  text-decoration: none;
-  -webkit-tap-highlight-color: transparent;
-}
-
-.bottomnav__item.is-active {
-  color: var(--md-red);
-}
-
-.bottomnav__icon {
-  width: 26px;
-  height: 26px;
-  display: block;
-}
-
-/* Visually hide labels but keep for screen readers */
-.bottomnav__label {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-  border: 0;
-}
-
-/* ---------------------------------------------------------------------------
-   Splash screen
-   ---------------------------------------------------------------------------
-   First-of-session brand moment. MD wordmark with a heartbeat pulse and
-   "Honor · Glory · Love" tagline. Fades to the rendered view after 2s, or
-   on tap. Skipped entirely on subsequent navigation within the session
-   (see inline script in HTML head).
-
-   Performance: data fetching in app.js / schedule-view.js / daysoff-view.js
-   runs in parallel with the splash — by the time the splash fades, the
-   underlying view is already rendered. The splash sits on top via z-index.
-   ------------------------------------------------------------------------- */
-
-.splash-skip .splash {
-  display: none;
-}
-
-.splash {
-  position: fixed;
-  inset: 0;
-  z-index: 100;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--md-gray-bg);
-  opacity: 1;
-  transition: opacity 380ms ease-out;
-  padding-top: env(safe-area-inset-top);
-  padding-bottom: env(safe-area-inset-bottom);
-  cursor: pointer;
-}
-
-.splash.is-dismissed {
-  opacity: 0;
-  pointer-events: none;
-}
-
-.splash__inner {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--spacing-lg);
-  user-select: none;
-}
-
-.splash__logo {
-  width: 60vw;
-  max-width: 320px;
-  height: auto;
-  display: block;
-  animation: splash-heartbeat 900ms ease-in-out infinite;
-  transform-origin: center;
-}
-
-@keyframes splash-heartbeat {
-  0%, 100% { transform: scale(1); }
-  20%      { transform: scale(1.06); }
-  40%      { transform: scale(1); }
-  60%      { transform: scale(1.04); }
-  80%      { transform: scale(1); }
-}
-
-.splash__tagline {
-  font-size: 0.875rem;
-  letter-spacing: 0.2em;
-  text-transform: uppercase;
-  color: var(--md-red);
-  font-weight: 600;
-  text-align: center;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .splash__logo {
-    animation: none;
+  .sports {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-md);
   }
-}
+
+  .sports-card {
+    background: var(--md-gray-surface);
+    border-radius: var(--radius);
+    padding: var(--spacing-lg);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  }
+
+  .sports-card__heading {
+    font-size: 1.125rem;
+    font-weight: 700;
+    margin-bottom: var(--spacing-md);
+  }
+
+  .sports-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
+
+  .sports-item {
+    padding: var(--spacing-md) 0;
+    border-bottom: 1px solid var(--md-gray-border);
+  }
+
+  .sports-item:last-child {
+    border-bottom: none;
+  }
+
+  .sports-item--home {
+    border-left: 3px solid var(--md-red);
+    padding-left: var(--spacing-md);
+  }
+
+  .sports-item__team {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--md-gray-text);
+  }
+
+  .sports-item__opponent {
+    font-size: 0.9375rem;
+    color: var(--md-gray-text);
+    margin-top: 1px;
+  }
+
+  .sports-item__meta {
+    font-size: 0.8125rem;
+    color: var(--md-gray-text-muted);
+    margin-top: 2px;
+  }
+
+  .sports-empty {
+    padding: var(--spacing-md) 0;
+    font-size: 1rem;
+    color: var(--md-gray-text-muted);
+  }
+
+  /* ---------------------------------------------------------------------------
+     Bottom navigation — 4 tabs with visible labels
+     ------------------------------------------------------------------------- */
+
+  .bottomnav {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    display: flex;
+    justify-content: space-around;
+    align-items: stretch;
+    background: var(--md-gray-surface);
+    border-top: 1px solid var(--md-gray-border);
+    box-shadow: 0 -1px 3px rgba(0, 0, 0, 0.04);
+    padding-bottom: env(safe-area-inset-bottom);
+    z-index: 10;
+  }
+
+  .bottomnav__item {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    min-height: var(--touch-min);
+    padding: var(--spacing-sm) 0 var(--spacing-xs);
+    color: var(--md-gray-text-muted);
+    text-decoration: none;
+    -webkit-tap-highlight-color: transparent;
+    font-size: 0.625rem;
+    letter-spacing: 0.02em;
+  }
+
+  .bottomnav__item.is-active {
+    color: var(--md-red);
+  }
+
+  .bottomnav__icon {
+    width: 22px;
+    height: 22px;
+    display: block;
+  }
+
+  .bottomnav__label {
+    font-weight: 500;
+    text-align: center;
+  }
+
+  /* ---------------------------------------------------------------------------
+     Splash screen
+     ------------------------------------------------------------------------- */
+
+  .splash-skip .splash {
+    display: none;
+  }
+
+  .splash {
+    position: fixed;
+    inset: 0;
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--md-gray-bg);
+    opacity: 1;
+    transition: opacity 380ms ease-out;
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+    cursor: pointer;
+  }
+
+  .splash.is-dismissed {
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .splash__inner {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--spacing-lg);
+    user-select: none;
+  }
+
+  .splash__logo {
+    width: 60vw;
+    max-width: 320px;
+    height: auto;
+    display: block;
+    animation: splash-heartbeat 900ms ease-in-out infinite;
+    transform-origin: center;
+  }
+
+  @keyframes splash-heartbeat {
+    0%, 100% { transform: scale(1); }
+    20%      { transform: scale(1.06); }
+    40%      { transform: scale(1); }
+    60%      { transform: scale(1.04); }
+    80%      { transform: scale(1); }
+  }
+
+  .splash__tagline {
+    font-size: 0.875rem;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--md-red);
+    font-weight: 600;
+    text-align: center;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .splash__logo {
+      animation: none;
+    }
+  }

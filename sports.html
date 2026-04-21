@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#B71C1C">
-  <title>MD Today — Days Off</title>
+  <title>MD Today — Sports</title>
   <link rel="manifest" href="./manifest.json">
   <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png">
   <link rel="icon" type="image/png" href="./icons/apple-touch-icon.png">
@@ -39,13 +39,13 @@
         <img class="page-header__logo" src="./icons/md-wordmark.png" alt="" aria-hidden="true">
         <span>MD Today</span>
       </div>
-      <div class="page-header__date" id="header-date">—</div>
+      <div class="page-header__date" id="header-date">&mdash;</div>
     </header>
     <div class="page-version">v2.0.0</div>
 
-    <main class="daysoff" id="daysoff">
+    <main class="sports" id="sports">
 
-      <!-- Validity region — trust state banner (reused from Now + Schedule views) -->
+      <!-- Validity region -->
       <section class="validity" id="validity" aria-live="polite">
         <div class="validity__icon" id="validity-icon" aria-hidden="true"></div>
         <div class="validity__body">
@@ -54,17 +54,14 @@
         </div>
       </section>
 
-      <!-- Days off card -->
-      <section class="daysoff-card" id="daysoff-card">
-        <div class="daysoff-card__heading" id="daysoff-heading">Upcoming days off</div>
+      <section class="sports-card" id="sports-card">
+        <h2 class="sports-card__heading" id="sports-heading">Today's Sports</h2>
 
-        <!-- Empty state (no upcoming days off, or offline with no cache) -->
-        <div class="daysoff-empty" id="daysoff-empty" hidden>
-          <div class="daysoff-empty__text" id="daysoff-empty-text"></div>
+        <ul class="sports-list" id="sports-list" hidden></ul>
+
+        <div class="sports-empty" id="sports-empty" hidden>
+          <div class="sports-empty__text" id="sports-empty-text"></div>
         </div>
-
-        <!-- Days-off list -->
-        <ul class="daysoff-list" id="daysoff-list" hidden></ul>
       </section>
 
     </main>
@@ -85,7 +82,7 @@
         </svg>
         <span class="bottomnav__label">Upcoming</span>
       </a>
-      <a href="./daysoff.html" class="bottomnav__item is-active" aria-current="page">
+      <a href="./daysoff.html" class="bottomnav__item">
         <svg class="bottomnav__icon" viewBox="0 0 24 24" aria-hidden="true">
           <rect x="4" y="5" width="16" height="16" rx="2" fill="none" stroke="currentColor" stroke-width="2"/>
           <line x1="4" y1="10" x2="20" y2="10" stroke="currentColor" stroke-width="2"/>
@@ -94,7 +91,7 @@
         </svg>
         <span class="bottomnav__label">Days Off</span>
       </a>
-      <a href="./sports.html" class="bottomnav__item">
+      <a href="./sports.html" class="bottomnav__item is-active" aria-current="page">
         <svg class="bottomnav__icon" viewBox="0 0 24 24" aria-hidden="true">
           <path d="M6 4h12v6a6 6 0 0 1-12 0V4z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
           <path d="M6 8H3V5h3M18 8h3V5h-3M9 20h6M12 16v4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
@@ -105,7 +102,7 @@
 
   </div>
 
-  <script type="module" src="./js/daysoff-view.js"></script>
+  <script type="module" src="./js/sports-view.js"></script>
   <script>
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
@@ -124,7 +121,6 @@
         splash.remove();
         return;
       }
-
       let dismissed = false;
       const dismiss = () => {
         if (dismissed) return;
@@ -132,7 +128,6 @@
         splash.classList.add('is-dismissed');
         setTimeout(() => { splash.remove(); }, 400);
       };
-
       splash.addEventListener('click', dismiss, { once: true });
       setTimeout(dismiss, SPLASH_HOLD_MS);
     })();
