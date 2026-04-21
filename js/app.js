@@ -273,16 +273,20 @@ function tickTemporal(now) {
     els.countdownText.classList.remove('now-header__countdown--active');
   } else if (status.secondsToNextTransition != null) {
     const totalSeconds = Math.max(0, Math.ceil(status.secondsToNextTransition));
-    const mins = Math.ceil(totalSeconds / 60);
-    if (status.status === 'period' && !status.nextBlock && !status.currentTracks) {
-      // Last block of the day — count down to end
-      els.countdownText.textContent = mins === 1
-        ? '1 minute remaining'
-        : `${mins} minutes remaining`;
+    const isLastBlock = status.status === 'period' && !status.nextBlock && !status.currentTracks;
+    const suffix = isLastBlock ? 'remaining' : 'until next block';
+
+    if (totalSeconds < 300) {
+      // Under 5 minutes — show minutes and seconds
+      const m = Math.floor(totalSeconds / 60);
+      const s = totalSeconds % 60;
+      const timeStr = m > 0
+        ? `${m}m ${String(s).padStart(2, '0')}s`
+        : `${s}s`;
+      els.countdownText.textContent = `${timeStr} ${suffix}`;
     } else {
-      els.countdownText.textContent = mins === 1
-        ? '1 minute until next block'
-        : `${mins} minutes until next block`;
+      const mins = Math.ceil(totalSeconds / 60);
+      els.countdownText.textContent = `${mins} minutes ${suffix}`;
     }
     els.countdownText.classList.add('now-header__countdown--active');
   }
