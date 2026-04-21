@@ -514,13 +514,13 @@ mdtoday/
 │   ├── schedule.js         ← Current period / next period logic
 │   ├── countdown.js        ← Tick timer for Now view (temporal layer only)
 │   ├── app.js              ← Now view entry point (render orchestration, tick wiring)
-│   └── schedule-view.js    ← Schedule view entry point (static render, no tick)
+│   ├── schedule-view.js    ← Schedule view entry point (static render, no tick)
+│   └── daysoff-view.js     ← Days Off view entry point (static list, grouping logic)
 ├── sw.js                   ← Service worker (cache strategy)
 ├── manifest.json           ← PWA manifest (icons, theme color, name)
 ├── icons/
-│   ├── icon-192.png
-│   ├── icon-512.png
-│   └── apple-touch-icon.png
+│   └── apple-touch-icon.png   ← 180×180, grabbed from materdei.org 2026-04-20
+│                              ← icon-192.png and icon-512.png not yet created
 └── README.md               ← How to update the sheet, update the iCal URL, deploy
 ```
 
@@ -691,6 +691,24 @@ Responsibilities:
 - Paint once. No tick, no subscription to `countdown.js`, no dynamic updates
 
 Intentional duplication from `app.js`: `formatTimeOfDay`, `relativeTimeAgo`, `DATE_FMT`, and the body of `renderValidity` are copy-pasted rather than extracted into a shared `render.js` module. A dedupe refactor is logged as a v2 candidate; the duplication is small, stable, and keeps each view a self-contained entry point.
+
+### `js/daysoff-view.js` — Days Off view orchestration
+
+The Days Off view's entry point. Loaded only by `daysoff.html`.
+
+Responsibilities:
+- Load data via `data.js` once at boot
+- Filter `data.events` to day-off events on or after today
+- Group consecutive same-SUMMARY runs into date ranges
+- Render the validity banner (reused — same rules as the other views, minus the `assumed` case which is today-specific)
+- Render the grouped list, or a dedicated empty state when none / offline
+- Paint once. No tick, no resolveDay call.
+
+Two things this module handles that no other module does:
+
+1. **Day-off filtering.** Uses its own copy of `DAY_OFF_KEYWORDS` that MUST stay identical to `resolve.js`'s copy. If the list changes in either file, it must change in both. A shared constants module is the v2 dedupe. The constant lists match as of 2026-04-20.
+
+2. **Weekend-bridged grouping.** Consecutive dates with identical SUMMARY merge into one range. A Sat/Sun-only gap (e.g., Christmas Break where the feed lists Dec 22–26 Mon–Fri, skips Sat/Sun, then resumes Mon) is bridged: the group extends across the weekend and the rendered range is `Dec 22 – Jan 2 · 12 days`. A gap including any weekday breaks the group. See the audit-verified test cases in the Phase 5 implementation notes.
 
 ---
 
@@ -882,12 +900,26 @@ These emerged during implementation and are worth logging so future sessions kno
 - **SW registration is deliberately not a module.** The `<script>` block in each HTML file is a plain synchronous script, not `type="module"`. This is because SW registration should work on every browser including ones with flaky ES-module support, and registration has no module dependencies. Keep it that way.
 - **The Stale-vs-Confirmed offline distinction is the whole point.** The SW by itself just serves the app shell — it doesn't care about trust state. The trust state is produced by `data.js` + `resolve.js` based on `lastFetch` freshness. Two layers of caching (SW for shell, localStorage for data), each with its own lifecycle. The test that matters is: "offline with stale localStorage cache → Stale banner visible." That's what 2026-04-20's cache-aging shim confirmed.
 
-### Phase 5: Days Off + polish
+### Phase 5: Days Off + polish — ✅ BUILD COMPLETE (polish items deferred)
 
-1. `daysoff.html` — iterate through future events, surface ones matching day-off keywords
-2. "Last updated" indicator refinement
-3. Fallback screens copy reviewed
-4. Verify time-to-decision in hallway-simulation test (walk past the app held in one hand, confirm state is readable in one glance)
+1. ✅ `daysoff.html` — iterates through future day-off events, groups consecutive same-SUMMARY runs into ranges, weekend-aware bridging
+2. ⏸ "Last updated" indicator refinement — not addressed in v1; current `relativeTimeAgo` formatter is acceptable
+3. ⏸ Fallback screens copy reviewed — current copy ("No school today.", "Schedule assumed — confirm with your teacher.", "MD Today is offline. Check with the front office.") was reviewed informally during build; no changes
+4. ⏸ Hallway-simulation test — pending real-student testing in Phase 6
+
+**Ship criterion:** ✅ MET for the Days Off view itself. Verified on 2026-04-20 across two cases:
+- Real-time (April 20, no shim): 4 day-offs through end of school year (MD Holiday, Memorial Day, two partial-grade closures), no false positives, no sport-event leakage
+- Synthetic 2025-12-01: Christmas Break correctly grouped as `Mon, Dec 22 – Fri, Jan 2 · 12 days` (single row, weekend bridged), Easter Break as `Thu, Apr 2 – Fri, Apr 10 · 9 days` (also bridged)
+
+### Phase 5 implementation notes
+
+- **Bug found and fixed mid-build: `'holiday'` keyword in `DAY_OFF_KEYWORDS` was producing false positives.** First Days Off render under the Dec 1 shim showed sport events ("V Girls Water Polo @ Holiday Cup", "V Girls Basketball @ Portland Holiday Classic") interleaved with real day-offs, AND those interleaved events broke the contiguous-same-SUMMARY grouping logic so Christmas Break split into three rows. Root cause: `'holiday'` matched any SUMMARY containing the substring "holiday" — `'no school'` was already covering every legitimate day-off in the feed, making `'holiday'` redundant as well as noisy. Fix: removed `'holiday'` from `DAY_OFF_KEYWORDS` in both `resolve.js` and `daysoff-view.js`. Side benefit: "No Summer School - 4th of July Holiday" also stops leaking into the Days Off list (it was caught by `'holiday'`; `'no school'` doesn't substring-match through "no summer school"). Pre-launch audit of `DAY_OFF_KEYWORDS` against the live feed should be repeated whenever the keyword list changes.
+- **Weekend-bridge rule for grouping.** Two consecutive same-SUMMARY day-offs are merged into one range if the only intervening days are Saturdays and/or Sundays. This handles the common pattern where multi-day breaks (Christmas, Easter) are populated in the feed only on weekdays — the school doesn't bother marking weekends as "No School - X Break" because weekends already aren't school days. Implementation walks `cursor = nextDay(current.end)` skipping weekend days; if `cursor` lands on the next item's date, merge. Any weekday gap (e.g., a Wed-only school day in the middle of a "break") would correctly split the group.
+- **Single source of truth for "is this a day-off?" duplicated.** Both `resolve.js` and `daysoff-view.js` carry their own copy of `DAY_OFF_KEYWORDS` and `isDayOffSummary()`. The keyword list change in this phase had to be applied in both places. v2 dedupe refactor: extract to `js/keywords.js` (or similar), import from both. Not done in v1 because the duplication is two short arrays and a 4-line function — the refactor would be more code than the duplication.
+- **Cache version bump (v1.0.0 → v1.0.1) was the first real exercise of Failure mode 7's defense.** Two new shell files (`daysoff.html`, `js/daysoff-view.js`) needed precaching, so the cache name had to flip in lockstep with footer version strings in all three HTML files. Discipline followed manually per Working Rule 14-equivalent (cache-name + footer in lockstep). Verified on the dev environment that the new SW activated, old `mdtoday-v1.0.0` cache was cleaned up by the activate handler, and new cache had 13 entries (was 11). The mechanism works.
+- **Two new v1.1 candidates surfaced:**
+  1. **Partial-grade-closure labels read as full-school closures.** "No School Grades 9-11" and "No School Grade 12" appear as plain rows with no indication that some students are still in school. A grade-12 student looking at the Days Off list on May 26 would see "No School Grades 9-11" and have to mentally check whether that includes them. Same class of issue as the upper/lower lunch-track asymmetry — the spec rejects per-student identity, so the honest fix is probably a clarifying label tweak rather than a filter.
+  2. **Days Off list gets long fast.** Dec 1 synthetic showed 9+ entries through end of year. Scrollable, but a student scanning quickly wants the *next* day-off prominent. A "Next day off: X" callout at the top of the list (mirroring the Now view's temporal region but for the future) would help once real-student feedback confirms it's worth doing.
 
 ### Phase 6: Deploy
 
@@ -931,6 +963,34 @@ If even one common calendar SUMMARY isn't mapped when the app ships, students wi
 - Map every SUMMARY that could plausibly represent a schedule day
 - For ambiguous SUMMARYs, err on the side of mapping them — an extra row in the sheet costs nothing; a missing one costs the launch
 - Run the app against every date in the school year in dev and confirm zero Assumed days on known school days
+
+**✅ Audit completed 2026-04-20.** Ran an in-browser audit against the live 2025–2026 feed. Result: 1043 unique SUMMARYs in the feed; all 18 schedule-representing SUMMARYs (`RED:`, `RED (...)`, `GRAY:`, `GRAY (...)`, `Special Online Schedule:`) are mapped in `summary_map`. Zero schedule SUMMARYs unmapped. Risk 1 mitigation verified.
+
+Audit snippet (runnable in browser console — reproduce before each school-year rotation):
+
+```js
+(async () => {
+  const { loadData } = await import('./js/data.js');
+  const d = await loadData();
+  const mapped = new Set((d.summaryMap || []).map(r => r.calendar_summary));
+  const scheduleLike = [...new Set(
+    d.events.filter(e => /schedule|^RED|^GRAY/i.test(e.summary)).map(e => e.summary)
+  )];
+  scheduleLike.sort().forEach(s => {
+    console.log(`${mapped.has(s) ? '✓ mapped ' : '✗ UNMAPPED'}  ${s}`);
+  });
+})();
+```
+
+Note: the `^RED|^GRAY` half of the regex catches non-schedule events with "Red" prefixes (e.g. "Red Ribbon Week", "Red Cross Blood Drive", "Red Hot Jazz") — those correctly appear as ✗ UNMAPPED and should be ignored. Any `✗ UNMAPPED` line containing `RED: B.`, `RED (`, `GRAY: B.`, `GRAY (`, or `Schedule:` is a real gap that needs a `summary_map` row.
+
+**Follow-up observations (not launch-blockers, candidates for v1.1+):**
+
+- **Semester Exams schedule events are unmapped.** Seven SUMMARY variants exist: `Semester Exams (Blocks 1 & 2)` through `Semester Exams (Blocks 7 & 8)` (and the block-order-swapped variants). Each appears once in the feed. These are real schedule days with non-standard block orders; currently the app enters Assumed state on exam days. Honest but suboptimal. Fix path: add a `semester_exams` template to the `templates` tab (or per-variant templates if block times differ), map each SUMMARY variant to it. Low priority until real exam weeks are observed in production.
+- **`FLEX DAY` × 3 occurrences — completely invisible to the app.** Not a schedule SUMMARY, not a day-off keyword, not an announcement keyword. Action item: ask the school what the schedule looks like on a FLEX DAY and either add a template or add a day-off keyword, depending on whether there's instruction.
+- **Announcement filter has plural-insensitive misses.** The `ANNOUNCEMENT_INCLUDE_KEYWORDS` list in `resolve.js` uses substring matching against lowercased summaries. `'testing'` catches `ACT Testing` but misses `SAT Test` (no trailing `ing`). `'graduation'` is absent — graduation day wouldn't surface as an announcement. `'last day'` is absent — `Last Day of School` is silent. Risk 2 says "loosen the filter only in response to a specific missed event, never preemptively," so these are logged but not fixed in v1. Revisit after real use.
+
+**Follow-up addendum (resolved during Phase 5 build):** The audit caught no schedule-SUMMARY false negatives, but Phase 5's Days Off view exposed a related issue in `DAY_OFF_KEYWORDS` — the `'holiday'` keyword was producing false positives on sport events ("Holiday Cup", "Portland Holiday Classic"). Removed in Phase 5. See Phase 5 implementation notes. Pre-launch keyword audits should test BOTH directions: schedule SUMMARYs not over-matched as day-offs, AND day-off SUMMARYs not under-matched.
 
 ### Risk 2: Announcement noise drift
 
