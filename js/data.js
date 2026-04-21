@@ -160,8 +160,147 @@ export function sanitizeSummary(raw) {
 // ---------------------------------------------------------------------------
 // Validators (protect system — throw on structural errors)
 // ---------------------------------------------------------------------------
+//
+// Validators run after sanitizers. They catch the kinds of errors that
+// sanitization can't repair: missing references, bad integer values,
+// overlapping time ranges, duplicate keys.
+//
+// A validator throws on the first structural error it finds. The caller
+// (loadData) catches the throw and falls back to cached data, keeping the
+// app usable with the last known-good state.
 
-// TODO: validateSheet
+/**
+ * Error thrown when the sheet data has structural problems that sanitization
+ * could not repair. Carries a `details` array describing every problem found
+ * so diagnostic logs can show all of them at once.
+ */
+export class SheetValidationError extends Error {
+    constructor(details) {
+      super(`Sheet validation failed: ${details.length} issue(s)`);
+      this.name = 'SheetValidationError';
+      this.details = details;
+    }
+  }
+  
+  /**
+   * Convert an HH:MM time string to minutes-since-midnight for overlap checks.
+   * Assumes input has already been sanitized to canonical HH:MM form.
+   */
+  function timeToMinutes(hhmm) {
+    const [h, m] = hhmm.split(':').map(n => parseInt(n, 10));
+    return h * 60 + m;
+  }
+  
+  /**
+   * Validate the sanitized templates + summary_map data together.
+   *
+   * @param {Array} templates Sanitized rows from the templates CSV
+   * @param {Array} summaryMap Sanitized rows from the summary_map CSV
+   * @throws {SheetValidationError} if any structural problem is found
+   * @returns true if valid
+   */
+  export function validateSheet(templates, summaryMap) {
+    const details = [];
+  
+    // --- templates: required fields present and typed correctly ---
+    for (const [i, row] of templates.entries()) {
+      const rowNum = i + 2; // +1 for header, +1 because arrays are 0-indexed (matches sheet row number)
+  
+      if (!row.template_id) {
+        details.push(`Templates row ${rowNum}: missing template_id`);
+      }
+      if (!Number.isInteger(row.block_order) || row.block_order < 1) {
+        details.push(`Templates row ${rowNum}: block_order must be integer ≥ 1 (got ${row.block_order})`);
+      }
+      if (!row.block_name) {
+        details.push(`Templates row ${rowNum}: missing block_name`);
+      }
+      if (row.start_time === null) {
+        details.push(`Templates row ${rowNum}: invalid or missing start_time`);
+      }
+      if (row.end_time === null) {
+        details.push(`Templates row ${rowNum}: invalid or missing end_time`);
+      }
+      // Track must be null, 'upper', or 'lower' — nothing else
+      if (row.track !== null && row.track !== 'upper' && row.track !== 'lower') {
+        details.push(`Templates row ${rowNum}: track must be blank, 'upper', or 'lower' (got '${row.track}')`);
+      }
+      // start_time must be before end_time
+      if (row.start_time !== null && row.end_time !== null) {
+        if (timeToMinutes(row.start_time) >= timeToMinutes(row.end_time)) {
+          details.push(`Templates row ${rowNum}: start_time (${row.start_time}) must be before end_time (${row.end_time})`);
+        }
+      }
+    }
+  
+    // --- templates: no duplicate (template_id, block_order, track) ---
+    const seenKeys = new Set();
+    for (const [i, row] of templates.entries()) {
+      const rowNum = i + 2;
+      const key = `${row.template_id}|${row.block_order}|${row.track ?? ''}`;
+      if (seenKeys.has(key)) {
+        details.push(`Templates row ${rowNum}: duplicate (template_id=${row.template_id}, block_order=${row.block_order}, track=${row.track ?? '(blank)'})`);
+      }
+      seenKeys.add(key);
+    }
+  
+    // --- templates: blocks within the same template+track must not overlap ---
+    // Group rows by (template_id, track), then check pairwise overlap within each group.
+    const groups = {};
+    for (const row of templates) {
+      if (row.start_time === null || row.end_time === null) continue;
+      const key = `${row.template_id}|${row.track ?? ''}`;
+      groups[key] = groups[key] || [];
+      groups[key].push(row);
+    }
+    for (const [key, rows] of Object.entries(groups)) {
+      const sorted = [...rows].sort((a, b) => timeToMinutes(a.start_time) - timeToMinutes(b.start_time));
+      for (let i = 1; i < sorted.length; i++) {
+        const prev = sorted[i - 1];
+        const curr = sorted[i];
+        if (timeToMinutes(curr.start_time) < timeToMinutes(prev.end_time)) {
+          details.push(
+            `Templates group ${key}: blocks overlap — "${prev.block_name}" (${prev.start_time}-${prev.end_time}) and "${curr.block_name}" (${curr.start_time}-${curr.end_time})`
+          );
+        }
+      }
+    }
+  
+    // --- summary_map: required fields ---
+    for (const [i, row] of summaryMap.entries()) {
+      const rowNum = i + 2;
+      if (!row.calendar_summary) {
+        details.push(`Summary map row ${rowNum}: missing calendar_summary`);
+      }
+      if (!row.template_id) {
+        details.push(`Summary map row ${rowNum}: missing template_id`);
+      }
+    }
+  
+    // --- summary_map: every template_id reference exists in templates ---
+    const definedTemplateIds = new Set(templates.map(r => r.template_id));
+    for (const [i, row] of summaryMap.entries()) {
+      const rowNum = i + 2;
+      if (row.template_id && !definedTemplateIds.has(row.template_id)) {
+        details.push(`Summary map row ${rowNum}: template_id '${row.template_id}' is not defined in templates tab`);
+      }
+    }
+  
+    // --- summary_map: no duplicate calendar_summary keys ---
+    const seenSummaries = new Set();
+    for (const [i, row] of summaryMap.entries()) {
+      const rowNum = i + 2;
+      if (seenSummaries.has(row.calendar_summary)) {
+        details.push(`Summary map row ${rowNum}: duplicate calendar_summary '${row.calendar_summary}'`);
+      }
+      seenSummaries.add(row.calendar_summary);
+    }
+  
+    if (details.length > 0) {
+      throw new SheetValidationError(details);
+    }
+    return true;
+  }
 
 // ---------------------------------------------------------------------------
 // Main entry point
