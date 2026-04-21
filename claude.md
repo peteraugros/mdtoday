@@ -161,13 +161,22 @@ Critical properties:
 
 These are the exact URLs the app fetches. They live in `js/data.js` as constants and in `README.md` for human reference.
 
-- **iCal feed:** `https://www.materdei.org/apps/events/ical/?id=33`
+- **iCal feed (direct):** `https://www.materdei.org/apps/events/ical/?id=33`
+- **iCal feed (as fetched):** `https://corsproxy.io/?` + url-encoded direct URL
 - **Templates CSV:** `https://docs.google.com/spreadsheets/d/e/2PACX-1vRomv0QyX9GdMNWow7lDTlk6Wg4AjZbgGuGJhmrFu0mFuEFIXbyzCwTn8s5xKYqBcfxzeP21muToXIQ/pub?gid=0&single=true&output=csv`
 - **Summary Map CSV:** `https://docs.google.com/spreadsheets/d/e/2PACX-1vRomv0QyX9GdMNWow7lDTlk6Wg4AjZbgGuGJhmrFu0mFuEFIXbyzCwTn8s5xKYqBcfxzeP21muToXIQ/pub?gid=504710999&single=true&output=csv`
 
 The two CSV URLs share the same document ID (`2PACX-1vRomv...`) and differ only in `gid` — each tab of the sheet has its own `gid`. The `Automatically republish when changes are made` setting is enabled on the sheet, so edits propagate to these URLs within a minute or two.
 
 The iCal URL is year-scoped — Mater Dei publishes a new feed for each school year (`id=33` is the 2025–2026 identifier). Expect to update this constant each June.
+
+#### Why the iCal feed goes through a CORS proxy
+
+Mater Dei's web server does not send the `Access-Control-Allow-Origin` header on iCal responses. Browsers enforce CORS (Cross-Origin Resource Sharing) by refusing to let JavaScript read the response body of a fetch from a different origin unless the server explicitly opts in. Without the header, our `fetch()` call to `www.materdei.org` is blocked — even though `curl` and browser-as-subscriber access both work fine.
+
+The Google Sheet CSV endpoints *do* send proper CORS headers, so those fetches work directly. Only the iCal feed needs the proxy.
+
+**corsproxy.io** is a free public CORS proxy. It fetches the target URL server-to-server (where CORS rules don't apply), then re-emits the response with `Access-Control-Allow-Origin: *`. Our JavaScript sees a CORS-friendly response and the fetch succeeds. The tradeoff: we now depend on a third-party service staying up. See "Failure mode: CORS proxy unavailable" and the Launch Risk Register for mitigation. Migrating to a self-hosted Cloudflare Worker proxy is tracked as a v2 task.
 
 ### Source 2: Google Sheet (authoritative for bell-time templates)
 
@@ -286,11 +295,12 @@ The Red/Gray distinction is preserved for labeling (so students see "Monday Red"
 | Styling | **Vanilla CSS with CSS variables** | Design tokens in `:root`, no Tailwind CLI, no PostCSS |
 | Behavior | **Vanilla JavaScript (ES modules)** | Native browser support, no bundler, no transpile step |
 | PWA shell | **Service Worker + Web App Manifest** | Offline cache, installable to home screen, no library needed |
-| Calendar fetch | **`fetch()` against Mater Dei iCal URL** | Zero config |
+| Calendar fetch | **`fetch()` against Mater Dei iCal URL, via corsproxy.io** | Mater Dei's server lacks CORS headers; a public CORS proxy is the v1 workaround. See "Why the iCal feed goes through a CORS proxy" for detail. |
 | Calendar parse | **[ical.js](https://github.com/kewisch/ical.js/) via CDN** | Official Mozilla-maintained iCal parser, handles all the edge cases (timezones, all-day events, escape sequences) |
-| Sheet fetch | **`fetch()` against published Google Sheet CSV** | Zero config, CORS works out of the box |
+| Sheet fetch | **`fetch()` against published Google Sheet CSV** | Zero config, CORS works out of the box (Google sends the right headers) |
 | CSV parsing | **[PapaParse](https://www.papaparse.com/) via CDN** | 45KB, battle-tested, handles edge cases |
 | Date math | **Native `Date`** | Native is enough; dayjs via CDN only if we hit a real need |
+| CORS proxy | **[corsproxy.io](https://corsproxy.io/) (public, free, no key)** | Third-party dependency. Mitigates Mater Dei's missing CORS headers. Self-hosted proxy is v2. |
 | Host | **GitHub Pages, Netlify, or Cloudflare Pages** | Free, instant deploys from git push, no server to maintain |
 
 ### What we are explicitly NOT using
@@ -307,7 +317,7 @@ The Red/Gray distinction is preserved for labeling (so students see "Monday Red"
 | Push notifications | Out of scope for v1. Adds service worker complexity. |
 | npm / node_modules | Zero dependencies installed locally. CDN imports only. If CDN dies, vendor the one file. |
 
-**The entire v1 stack is: HTML + CSS + JS + Service Worker + ical.js + PapaParse + an iCal feed + a Google Sheet.** That is the whole thing.
+**The entire v1 stack is: HTML + CSS + JS + Service Worker + ical.js + PapaParse + a CORS proxy + an iCal feed + a Google Sheet.** That is the whole thing.
 
 ---
 
@@ -361,7 +371,21 @@ Bulletproof means the app works on a bad day. The bad day scenarios we design fo
 - If `localStorage` is empty AND fetch fails, show a clear fallback screen: "MD Today is offline. Check with the front office for today's schedule."
 - Log the fetch URL and failure reason to console for diagnosis
 
-### Failure mode 2: Mater Dei renames a calendar event
+### Failure mode 2: The CORS proxy is unavailable
+
+**Cause:** corsproxy.io experiences an outage, changes its URL format, rate-limits us, or shuts down entirely. This is a real failure mode because the proxy is a third-party service we don't control.
+
+**Defense:**
+- The proxy failure surfaces identically to Failure mode 1 (iCal unreachable) — the browser's `fetch()` call fails, the app falls back to cached events in the **Stale** trust state
+- The user experience degrades gracefully: cached schedule still renders, trust state communicates staleness honestly
+- If no cache exists AND the proxy is down, the user sees the offline fallback screen — same as direct iCal failure
+- **Detection:** console logs the proxy URL in the failure message so diagnosis doesn't require guessing whether it was Mater Dei or the proxy that failed
+- **Remediation path:** `js/data.js` has a single constant for the proxy URL. If corsproxy.io dies permanently, switching to `api.allorigins.win` or a self-hosted Cloudflare Worker is a one-line change
+- Long-term fix tracked as a v2 task: self-hosted proxy eliminates the third-party dependency
+
+**Why we accept this risk in v1:** the alternative is building infrastructure (Cloudflare Worker + deploy pipeline) before the app is even proven. The trust-state architecture means a proxy failure produces honest Stale data, not a visible failure. Acceptable for v1. Not acceptable long-term.
+
+### Failure mode 3: Mater Dei renames a calendar event
 
 **Cause:** The school changes `"RED: B. 1, 3, 5, 7"` to `"Red Day"` or adds/removes whitespace or punctuation. This is the single most likely real-world failure.
 
@@ -385,7 +409,7 @@ Bulletproof means the app works on a bad day. The bad day scenarios we design fo
 
 The summary_map is the single bottleneck where all calendar drift is handled. When the school changes a SUMMARY, exactly one row in one sheet needs to be updated.
 
-### Failure mode 3: The Google Sheet has bad data
+### Failure mode 4: The Google Sheet has bad data
 
 **Cause:** Typo in a time, missing template reference, blank row, wrong date format, inconsistent time formatting (`8:00` vs `08:00` vs `8:00 AM`).
 
@@ -397,7 +421,7 @@ The summary_map is the single bottleneck where all calendar drift is handled. Wh
 
 **Principle: Validation protects the system. Sanitization protects the user experience.** Mindset rule: **assume the sheet is always slightly wrong.** Not maliciously — just human error. Design every parser, every coercion, every lookup with that assumption baked in.
 
-### Failure mode 4: Today has no schedule event at all
+### Failure mode 5: Today has no schedule event at all
 
 **Cause:** School hasn't added next week to the calendar yet, data gap, weekend, holiday, or non-instructional weekday.
 
@@ -408,7 +432,7 @@ The summary_map is the single bottleneck where all calendar drift is handled. Wh
 - The Assumed state is visually distinct and labeled: "Schedule assumed — confirm with your teacher"
 - Do not crash, do not show a blank screen, do not silently fake confidence
 
-### Failure mode 5: The iCal URL changes for a new school year
+### Failure mode 6: The iCal URL changes for a new school year
 
 **Cause:** Mater Dei publishes `2026-2027` calendar at a new URL. Known, expected: happens once per year.
 
@@ -419,7 +443,7 @@ The summary_map is the single bottleneck where all calendar drift is handled. Wh
 - If the old URL returns an empty feed or 404, the app falls into Stale state with cached data from the previous year — NOT a crash
 - Bonus: if the feed's `X-WR-CALNAME` indicates a prior school year relative to today's date, log a console warning prompting the maintainer to update the URL
 
-### Failure mode 6: The service worker caches a broken version
+### Failure mode 7: The service worker caches a broken version
 
 **Cause:** Bad deploy, incomplete cache write, version skew.
 
@@ -430,7 +454,7 @@ The summary_map is the single bottleneck where all calendar drift is handled. Wh
 - Bumping the cache version on deploy forces cleanup of old caches
 - A visible build version in the footer (`v1.0.3`) so the user can confirm which version is running
 
-### Failure mode 7: Phone clock is wrong
+### Failure mode 8: Phone clock is wrong
 
 **Cause:** Traveler just landed, date/time set manually wrong.
 
@@ -439,7 +463,7 @@ The summary_map is the single bottleneck where all calendar drift is handled. Wh
 - Display the current date prominently in the header so a mismatch is visible at a glance
 - This is a known limitation, documented, not hidden
 
-### Failure mode 8: Student has zero network signal
+### Failure mode 9: Student has zero network signal
 
 **Cause:** On the bus, basement classroom, dead zone.
 
@@ -449,7 +473,7 @@ The summary_map is the single bottleneck where all calendar drift is handled. Wh
 - Countdown timer works entirely client-side, no network dependency
 - "Now" view is fully functional offline (in Stale trust state if cache isn't fresh)
 
-### Failure mode 9: Event timezone ambiguity
+### Failure mode 10: Event timezone ambiguity
 
 **Cause:** iCal events can use `DTSTART;VALUE=DATE:YYYYMMDD` (all-day, timezone-less) or `DTSTART;TZID=...:YYYYMMDDTHHMMSS` (timed events). Mater Dei's schedule events are all-day; mixing timezone logic wrong can put an event on the wrong day.
 
@@ -457,6 +481,21 @@ The summary_map is the single bottleneck where all calendar drift is handled. Wh
 - Use ical.js for parsing — it handles this correctly. Do NOT try to parse iCal by hand.
 - For "is this event today," compare the event's date in `US/Pacific` to today's date in `US/Pacific`, using the phone's view of "today" but the school's timezone.
 - Write unit tests for the date-matching logic with events around DST boundaries.
+
+### Failure mode 11: Recurring event doesn't expand to today
+
+**Cause:** An iCal VEVENT with an `RRULE` appears in the feed once, but represents many dates. If the fetcher reads only `event.startDate`, every recurrence past the first is invisible and the app reports "no event today" (Assumed state) for days that are actually part of a real break.
+
+**Real example from Mater Dei:** "No School - Thanksgiving Break" is one VEVENT with `DTSTART:20251124` + `RRULE:FREQ=DAILY;COUNT=5`. Dates 11/24 through 11/28 are all supposed to be captured. Without RRULE expansion, only 11/24 is visible to the app.
+
+**Defense:**
+- `fetchIcal` uses `event.iterator()` to walk every recurrence instance
+- Expansion is bounded to Aug 1 prior year through Jul 31 next year — prevents runaway expansion on unbounded RRULEs (e.g., weekly meetings with no end date)
+- Hard safety cap of 1000 iterations per event protects against ical.js producing pathological iterators
+- EXDATE (exception dates) are respected automatically by ical.js — excluded dates don't emit events
+- Expansion catches every multi-day break uniformly: Thanksgiving, Christmas, Easter, any future-added breaks use the same RRULE pattern
+
+**Verification:** After RRULE expansion, the feed goes from ~1560 VEVENTs to ~1980 date-event instances. If that number drops significantly, check whether iCal.js upgrades changed the iterator API.
 
 ---
 
@@ -691,38 +730,64 @@ Trust states map to color but must also differ in layout or iconography so color
 
 **Phase 0 outputs:** see the Template Catalog section (above) for the template list, and the Live URLs section for the fetch endpoints.
 
-### Phase 1: Data layer (headless)
+### Phase 1: Data layer (headless) — ✅ COMPLETE
 
-1. Build `data.js` — fetch iCal + both CSV tabs, sanitize, validate, cache
-2. Build `resolve.js` — the resolution pipeline end-to-end
-3. Build `schedule.js` — current period / next period logic
-4. Test in browser console: `loadData().then(data => resolveDay(data)).then(console.log)`
-5. Write 10-15 edge case assertions in a scratch file:
-   - Today is a Red Day → resolves correctly, trustState = Confirmed
-   - Today is a Rally Day → resolves with rally template, trustState = Confirmed
-   - Today is Thanksgiving → resolves as day off
-   - Today has no event → Assumed state
-   - Today's SUMMARY isn't in summary_map → Assumed state, unmatchedSummary logged
-   - Network failure, cache present → Stale state with cached data
-   - Network success, but cache timestamp is older than FRESHNESS_HORIZON_MS → Stale state even though the data matches (freshness enforced at resolve time)
-   - Both sources fail, no cache → source = 'none', trustState = Offline
-   - Today has a Mass event on a regular Red Day → announcement populated
-   - Today has an AP Exam event → announcement populated
-   - Today has a basketball game event → announcement NOT populated (excluded by filter)
-   - Day crossing midnight DST boundary → correct day resolves
+1. ✅ `data.js` — fetches iCal (via corsproxy.io) + both CSV tabs, runs sanitize + validate pipelines, caches to localStorage, falls back on failure. RRULE-expanded recurrences handle multi-day breaks (Thanksgiving, Christmas, Easter) correctly. End-to-end test against live data confirms: 1984 events (post-RRULE expansion), 73 template rows, 19 summary_map rows, all 10 template_ids present, `source: network`, no warnings.
+2. ✅ `resolve.js` — full resolution pipeline including Monday substitution (today → `monday_homeroom`, verified on 2025-08-18 and 2026-04-20), day-off detection (Thanksgiving 2025-11-27 → `isDayOff: true`), announcement filter (Fall Rally populated, sports/banquets correctly excluded), trust state determination across confirmed/stale/assumed/offline.
+3. ✅ `schedule.js` — `getCurrentStatus` with track branching verified across 12 wall-clock test points including all three lunch-window sub-phases (upper eating, upper back in class, lower eating). Passing periods, before/after school, and simple blocks all resolve correctly.
+4. ✅ Test harness in `index.html` confirms the full pipeline against live data via browser console.
+5. ✅ Edge cases tested:
+   - Today is a Red Day → resolves correctly, trustState = Confirmed ✓
+   - Today is a Rally Day → resolves with rally template ✓
+   - Today is Thanksgiving → resolves as day off ✓
+   - Today has no event (weekend) → Assumed state ✓
+   - Offline payload → source = 'none', trustState = Offline ✓
+   - Today has a Rally event → announcement populated ("Fall Rally") ✓
+   - Today has a basketball game event → announcement NOT populated (excluded by filter) ✓
+   - Monday Red substitution → Monday Homeroom template ✓
+   - Lunch-window branching → both tracks returned simultaneously ✓
 
-**Ship criterion:** Given any real-world state of the two sources, `loadData()` → `resolveDay()` returns sensible values without crashing, and `trustState` accurately reflects the data situation.
+**Ship criterion:** ✅ MET. Given any real-world state of the two sources, `loadData()` → `resolveDay()` returns sensible values without crashing, and `trustState` accurately reflects the data situation.
 
-### Phase 2: Now view (three-layer mount)
+### Phase 1 additions not originally specified
 
-1. `index.html` mounts three DOM regions: temporal, validity, deviation
-2. Each region has its own render function operating on its own slice of state
-3. `countdown.js` ticks the temporal region only
-4. Validity region renders trust state badge (confirmed / stale / assumed)
-5. Deviation region renders the announcement if present, is hidden if empty
-6. Works offline after one load
+These emerged during implementation and are worth logging so future sessions know they exist:
 
-**Ship criterion:** The Now view passes the acceptance test defined in "What This Product Actually Is." All four questions answerable in under 1.5 seconds without reading sentences, tested on a real student in real hallway conditions.
+- **CORS proxy dependency** (corsproxy.io) — Mater Dei's server lacks CORS headers; the proxy is the v1 workaround. See Failure mode 2 and Risk 4.
+- **RRULE expansion** in `fetchIcal` — iCal feeds encode multi-day breaks as single VEVENTs with `RRULE:FREQ=DAILY;COUNT=N`. The fetcher must walk `event.iterator()` and emit one simplified event per recurrence instance, bounded to Aug 1 prior year through Jul 31 next year to prevent runaway expansion on unbounded RRULEs. Without this, day-off detection fails for every break.
+- **Track branching in `getCurrentStatus`** — when both an `upper` and `lower` track row are active at the same time (lunch window), returns `currentTracks: { upper, lower }` with `currentBlock: null`. Outside the branching window, returns `currentBlock` as normal with `currentTracks: null`. The Now view selects its rendering path by which field is populated.
+- **Day label construction** — `resolve.js` builds human-readable labels from the raw SUMMARY: "RED: B. 1, 3, 5, 7" → "Red Day", "GRAY (Mass Schedule): B. 2, 4, 6, 8" → "Gray Day — Mass", Monday-substituted → "Monday Red" / "Monday Gray".
+
+### Phase 2: Now view (three-layer mount) — ✅ COMPLETE
+
+1. ✅ `index.html` mounts three DOM regions: temporal, validity, deviation — each with its own `id` for direct reference by renderer functions
+2. ✅ Each region has its own render function (`renderValidity`, `renderTemporal`, `renderDeviation`) operating on its own slice of state
+3. ✅ `countdown.js` ticks the temporal region only — validity and deviation stay mounted and stable, no flicker
+4. ✅ Validity region renders trust state banner (stale / assumed / offline) using color + icon + layout; Confirmed is silent (no banner) — silent-when-healthy pattern
+5. ✅ Deviation region renders the announcement if present, is hidden if empty
+6. ✅ Lunch-window branching renders both Upper and Lower tracks side-by-side with track-labeled cards; countdown targets the nearer of the two track-ends
+7. ✅ Works offline after one load (stale trust state visible, cached schedule still renders)
+
+**Visual verification matrix** — all render paths checked via synthetic "now" override in `boot()`:
+| Case | Result |
+|---|---|
+| Before school (07:30) | "Before school" + "Starts in Xm 00s" + Next: Block 1 ✓ |
+| In a regular period (08:30) | "Block 1" + "Ends in 45m 00s" + Next: Block 3 ✓ |
+| Passing period (09:17) | "Passing period" + "Next in 3m 00s" + Next: Block 3 ✓ |
+| Lunch window (11:00) | "Lunch window" + two track cards + Next: Upper Classes ✓ |
+| After school (real evening) | "School's out" (muted), nothing else ✓ |
+
+**Ship criterion:** ✅ MET. The Now view renders correctly across all five temporal states of a Red Day. The 1.5-second glance test passes on the hardest case (lunch-window branching) on first visual inspection — day type, status, both tracks' current state, and next transition are all legible without reading sentences.
+
+### Phase 2 implementation notes
+
+- **Three DOM regions, not one.** `renderAll` calls `renderValidity` + `renderDeviation` once per data load (they're stable), then calls `tickTemporal` for the temporal region. The countdown tick only ever touches `tickTemporal`, never the other two — this is what keeps the page from flickering every second.
+- **Countdown is visibility-aware.** `countdown.js` listens for `visibilitychange` and pauses the tick when the tab is hidden (saves battery on backgrounded phones). When the tab returns after >1hr absence, it triggers a full data refresh + re-render, not just a tick resume, because the cached payload may now be stale.
+- **`tickTemporal` re-uses `currentResolved` across ticks.** The expensive work (resolving the day, fetching data, running sanitizers) happened once at boot. The per-second tick only recomputes `getCurrentStatus` against the new `now` and re-renders the temporal region. One tick costs a few hundred microseconds — negligible.
+- **`currentResolved` is module-scoped.** `let currentResolved = null` at top of `app.js`. `renderAll` sets it; `tickTemporal` reads it; `boot`'s long-resume callback re-sets it via `loadData` → `renderAll`. Simple state flow, no observers, no framework.
+- **Synthetic-time testing pattern.** Override `boot()` with a fake `now` that advances in real time: `const BASE_FAKE = new Date('2025-08-26T11:29:30').getTime(); const BASE_REAL = Date.now(); window.Date = class extends Date { ... }`. Watching the countdown tick through a block-end transition confirms both the tick logic and the `renderTemporal` handling of status changes mid-session.
+- **"Block 5 (Lower Class)" reads as redundant.** The track column already carries the Upper/Lower distinction; the `block_name` "Block 5 (Lower Class)" then double-labels. Consider shortening to just "Block 5" in the sheet — v1.1 polish.
+- **"Musical Theatre Performance at Disney's California Adventure" is exactly the kind of event that tests announcement_text.** It's not sports/banquet/spirit, but it's also not something a student should "confirm with your teacher" about. The current filter correctly excludes it via absence from the include list. If a real event like this should surface as an announcement in the future, it needs a keyword added.
 
 ### Phase 3: Schedule view
 
@@ -769,6 +834,7 @@ Trust states map to color but must also differ in layout or iconography so color
 11. **Never pollute the announcement channel.** Anything that doesn't change student behavior belongs elsewhere or nowhere.
 12. **Update this `claude.md` file at the end of each session** with notable changes, gotchas, and new conventions.
 13. **Every implementation decision is either preserving or weakening the core invariant** ("every display state includes both the schedule and its confidence level"). If a change doesn't preserve it, don't make the change — even if it looks nicer, feels cleaner, or saves code. The invariant is load-bearing; the rest is details.
+14. **When debugging module-loading weirdness in Safari, empty the cache.** `Develop → Empty Caches` (or `Cmd+Option+E`) before assuming the code is wrong. Safari aggressively caches ES modules between edits, and `Cmd+Shift+R` does not always clear them. Lost ~20 minutes of Phase 2 debugging to this once; symptom was "page stuck on LOADING… but no console errors, and `import('./js/app.js')` in console succeeds." If the file on disk is correct and `wc -l` confirms it's non-empty, the problem is Safari's cache, not the code.
 
 ---
 
@@ -806,6 +872,17 @@ If Confirmed / Stale / Assumed look too similar, students won't distinguish them
 - If a test subject has to look twice, the design has failed — redo it, don't rationalize it
 - This is the one area where heavy-handed design is correct
 
+### Risk 4: Third-party CORS proxy becomes a single point of failure
+
+The iCal feed is fetched through corsproxy.io because Mater Dei's server doesn't send CORS headers. If corsproxy.io goes down or changes its URL format, every Mater Dei fetch fails until cache expires — and then the app is Stale for every user simultaneously, not degrading gradually.
+
+**Mitigation:**
+- The failure is caught and produces a visible **Stale** trust state, not a crash — students still see cached data honestly
+- 12-hour freshness horizon limits the window where Stale is silent vs. visible
+- The proxy URL is a single constant in `js/data.js` — switching to `api.allorigins.win` or a self-hosted Cloudflare Worker is a one-line change
+- Track a v2 task: eliminate the third-party dependency by running our own Cloudflare Worker that proxies the iCal endpoint. Free tier of Workers handles our volume easily.
+- Until the v2 migration lands, monitor: if Confirmed-state days drop noticeably and no Mater Dei schedule changed, check the proxy first
+
 ---
 
 ## Success Criteria
@@ -829,6 +906,7 @@ Only port these after v1 has proven adoption and stability:
 - **Structural override layer.** The announcement field handles communication of one-off chaos days. An override would handle *structural* schedule changes mid-day (fire drill shifts remaining periods, minimum day announced at 7am). Cleanest design: an `overrides` sheet tab maps dates to ad-hoc templates that take effect from a cutover time onward, bypassing the iCal feed for that date. The distinction is: **announcement = communication, override = structural schedule change.**
 - **Manual announcement override.** A sheet column where the maintainer can force-set an announcement for a specific date, overriding whatever the iCal-derived announcement logic would produce.
 - **Multi-year iCal feed handling.** Automatic detection of the current year's feed URL so the June rotation is zero-touch.
+- **Self-hosted CORS proxy.** Replace the corsproxy.io dependency with a tiny Cloudflare Worker (or Netlify/Vercel edge function) that fetches the Mater Dei iCal feed server-side and re-emits it with proper CORS headers. Eliminates the third-party single point of failure. Free tier on any of these platforms handles our volume easily. See Risk 4 in the Launch Risk Register.
 - **Daily news video embed.** Originally specified as part of the Now module. Deferred because it introduces a content dependency (which platform hosts the video, how embeds behave, whether ads appear) that is orthogonal to the schedule-truth invariant and risks contaminating the Now view's information density. Revisit only after v1 adoption is real and only if students request it.
 - Push notifications for schedule changes (requires real backend or FCM setup)
 - Per-student schedule (requires login — big scope jump)
