@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MD Today</title>
+</head>
+<body>
+  <p>MD Today — dev shell. Open DevTools console.</p>
+
+  <script type="module">
+    // Verify library imports succeed before we build anything on top.
+    import * as data from './js/data.js';
+    import Papa from 'https://cdn.jsdelivr.net/npm/papaparse@5.4.1/+esm';
+    import ICAL from 'https://cdn.jsdelivr.net/npm/ical.js@1.5.0/+esm';
+
+    console.log('[MD Today] data module loaded:', data);
+    console.log('[MD Today] PapaParse version:', Papa.RECORD_SEP ? 'loaded' : 'FAILED');
+    console.log('[MD Today] ical.js loaded:', typeof ICAL);
+    console.log('[MD Today] ICAL_URL:', data.ICAL_URL);
+    console.log('[MD Today] FRESHNESS_HORIZON_MS:', data.FRESHNESS_HORIZON_MS);
+    console.log('[MD Today] isFresh(now):', data.isFresh(new Date().toISOString()));
+    console.log('[MD Today] isFresh(yesterday):', data.isFresh(new Date(Date.now() - 24*60*60*1000).toISOString()));
+  </script>
+</body>
+</html>
