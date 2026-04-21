@@ -10,32 +10,72 @@
 
   <script type="module">
     import * as data from './js/data.js';
+    import { resolveDay } from './js/resolve.js';
   
-    console.log('--- Live fetch test ---');
-    console.log('Fetching... (check Network tab if this hangs)');
+    console.log('--- Resolve test ---');
   
     const payload = await data.loadData();
+    console.log('source:', payload.source, '| events:', payload.events.length);
   
-    console.log('source:', payload.source);
-    console.log('lastFetch:', payload.lastFetch);
-    console.log('warnings:', payload.warnings);
-    console.log('events count:', payload.events.length);
-    console.log('templates count:', payload.templates.length);
-    console.log('summaryMap count:', payload.summaryMap.length);
+    // Test 1: Today
+    const today = resolveDay(payload);
+    console.log('\n[Today]');
+    console.log('  dayLabel:', today.dayLabel);
+    console.log('  templateId:', today.templateId);
+    console.log('  trustState:', today.trustState);
+    console.log('  isDayOff:', today.isDayOff);
+    console.log('  announcement:', today.announcement);
+    console.log('  blocks:', today.template?.blocks.length);
+    console.log('  unmatchedSummary:', today.unmatchedSummary);
   
-    console.log('first 3 events:', payload.events.slice(0, 3));
-    console.log('first 3 templates:', payload.templates.slice(0, 3));
-    console.log('full summaryMap:', payload.summaryMap);
+    // Test 2: A known Red Day on a non-Monday (Tuesday 8/26/2025)
+    const redTuesday = resolveDay(payload, new Date('2025-08-26T10:00:00'));
+    console.log('\n[Tuesday 2025-08-26 — expected Red Day]');
+    console.log('  dayLabel:', redTuesday.dayLabel);
+    console.log('  templateId:', redTuesday.templateId);
+    console.log('  trustState:', redTuesday.trustState);
   
-    // Count distinct template_ids that appear in the templates data
-    const distinctTemplates = [...new Set(payload.templates.map(r => r.template_id))];
-    console.log('distinct template_ids:', distinctTemplates);
+    // Test 3: A Monday Red Day — should substitute to monday_homeroom
+    const mondayRed = resolveDay(payload, new Date('2025-08-18T10:00:00'));
+    console.log('\n[Monday 2025-08-18 — expected Monday Red]');
+    console.log('  dayLabel:', mondayRed.dayLabel);
+    console.log('  templateId:', mondayRed.templateId);
+    console.log('  expected templateId: monday_homeroom');
   
-    // Today's events (if any)
-    const today = new Date();
-    const todayStr = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
-    const todayEvents = payload.events.filter(e => e.date === todayStr);
-    console.log(`events on ${todayStr}:`, todayEvents);
+    // Test 4: A weekend day — no events, should be Assumed
+    const saturday = resolveDay(payload, new Date('2025-09-06T10:00:00'));
+    console.log('\n[Saturday 2025-09-06 — expected no events]');
+    console.log('  dayLabel:', saturday.dayLabel);
+    console.log('  templateId:', saturday.templateId);
+    console.log('  trustState:', saturday.trustState);
+    console.log('  expected trustState: assumed (weekday-or-weekend, no event)');
+  
+    // Test 5: Thanksgiving Break (if present in feed)
+    const thanksgiving = resolveDay(payload, new Date('2025-11-27T10:00:00'));
+    console.log('\n[Thursday 2025-11-27 — expected Thanksgiving Break]');
+    console.log('  dayLabel:', thanksgiving.dayLabel);
+    console.log('  isDayOff:', thanksgiving.isDayOff);
+    console.log('  dayOffLabel:', thanksgiving.dayOffLabel);
+  
+    // Test 6: Offline payload — should return offline state
+    const offlineResult = resolveDay({ source: 'none', events: [], templates: [], summaryMap: [] });
+    console.log('\n[Offline payload]');
+    console.log('  trustState:', offlineResult.trustState);
+    console.log('  expected: offline');
+  
+    // Test 7: A day with a rally event — should set announcement
+    // Look for any rally event and test its date
+    const rallyEvent = payload.events.find(e =>
+      /^homecoming rally|^fall rally|^winter rally|^spring rally/i.test(e.summary)
+    );
+    if (rallyEvent) {
+      console.log('\n[Testing announcement via rally event on', rallyEvent.date, ']');
+      const [y, m, d] = rallyEvent.date.split('-').map(n => parseInt(n, 10));
+      const rallyDay = resolveDay(payload, new Date(y, m - 1, d, 10, 0));
+      console.log('  dayLabel:', rallyDay.dayLabel);
+      console.log('  announcement:', rallyDay.announcement);
+      console.log('  (rally event SUMMARY was:', rallyEvent.summary, ')');
+    }
   </script>
 </body>
 </html>

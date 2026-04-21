@@ -341,42 +341,68 @@ async function fetchCsv(url) {
   }
   
   /**
-   * Fetch and parse the Mater Dei iCal feed.
-   * Returns an array of simplified event objects: { date, summary, description }.
-   *
-   * The raw feed is ~1,500 events across a school year, ~1MB of text. We simplify
-   * to the fields the resolver actually needs, and filter to this school year only
-   * so localStorage stays small.
-   */
-  async function fetchIcal(url) {
-    const response = await fetch(url);
-    if (!response.ok) {
-      throw new Error(`iCal fetch failed: ${response.status} ${response.statusText} (${url})`);
-    }
-    const text = await response.text();
-  
-    const jcal = ICAL.parse(text);
-    const vcalendar = new ICAL.Component(jcal);
-    const vevents = vcalendar.getAllSubcomponents('vevent');
-  
-    const simplified = vevents.map(vevent => {
-      const event = new ICAL.Event(vevent);
-      // For all-day events (which is what schedule events are), startDate is a
-      // timezoneless ICAL.Time — we want the raw YYYY-MM-DD string.
-      const start = event.startDate;
-      const dateStr = start
-        ? `${start.year}-${String(start.month).padStart(2, '0')}-${String(start.day).padStart(2, '0')}`
-        : null;
-  
-      return {
-        date: dateStr,
-        summary: sanitizeSummary(event.summary || ''),
-        description: event.description || '',
-      };
-    });
-  
-    return simplified;
+ * Fetch and parse the Mater Dei iCal feed.
+ * Returns an array of simplified event objects: { date, summary, description }.
+ *
+ * Recurring events (RRULE) are expanded into individual date instances, one
+ * per recurrence. For example, "No School - Thanksgiving Break" appears in
+ * the raw feed as one VEVENT with RRULE:FREQ=DAILY;COUNT=5, and we expand it
+ * to 5 separate simplified events, one per date.
+ *
+ * Recurrence expansion is bounded to the current school year (August 1 through
+ * July 31 of the next calendar year relative to today) to avoid runaway
+ * iteration on events with unbounded RRULEs.
+ */
+async function fetchIcal(url) {
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(`iCal fetch failed: ${response.status} ${response.statusText} (${url})`);
   }
+  const text = await response.text();
+
+  const jcal = ICAL.parse(text);
+  const vcalendar = new ICAL.Component(jcal);
+  const vevents = vcalendar.getAllSubcomponents('vevent');
+
+  // Expansion window: Aug 1 of the prior year through Jul 31 of the following
+  // year, relative to today. Covers the whole school year regardless of when
+  // in the year the app is loaded.
+  const now = new Date();
+  const expansionStart = new Date(now.getFullYear() - 1, 7, 1); // Aug 1 prior year
+  const expansionEnd = new Date(now.getFullYear() + 1, 6, 31);  // Jul 31 next year
+  const icalStart = ICAL.Time.fromJSDate(expansionStart);
+  const icalEnd = ICAL.Time.fromJSDate(expansionEnd);
+
+  const simplified = [];
+
+  for (const vevent of vevents) {
+    const event = new ICAL.Event(vevent);
+    const summary = sanitizeSummary(event.summary || '');
+    const description = event.description || '';
+
+    if (event.isRecurring()) {
+      // Expand the recurrence and emit one simplified event per occurrence
+      const iterator = event.iterator();
+      let next;
+      let safety = 0;
+      while ((next = iterator.next()) && safety < 1000) {
+        safety++;
+        if (next.compare(icalStart) < 0) continue;
+        if (next.compare(icalEnd) > 0) break;
+        const dateStr = `${next.year}-${String(next.month).padStart(2, '0')}-${String(next.day).padStart(2, '0')}`;
+        simplified.push({ date: dateStr, summary, description });
+      }
+    } else {
+      // Non-recurring event — emit once using startDate
+      const start = event.startDate;
+      if (!start) continue;
+      const dateStr = `${start.year}-${String(start.month).padStart(2, '0')}-${String(start.day).padStart(2, '0')}`;
+      simplified.push({ date: dateStr, summary, description });
+    }
+  }
+
+  return simplified;
+}
   
   // ---------------------------------------------------------------------------
   // Cache helpers
