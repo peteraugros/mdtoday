@@ -256,9 +256,14 @@ export function resolveDay(data, date = new Date()) {
   }
 
   // --- Resolve announcement (first qualifying non-schedule event) ---
+  // Skip ANY event whose SUMMARY is in the summary_map — not just the one
+  // we picked as scheduleEvent. On pair days, two schedule events exist for
+  // the same date (e.g., pair_early + pair_late). Without this guard, the
+  // second schedule event leaks into the announcement banner because its
+  // SUMMARY contains keywords like "dismissal" or "late start."
   let announcement = null;
   for (const event of todayEvents) {
-    if (event === scheduleEvent) continue;
+    if (summaryToTemplate.has(event.summary)) continue;
     if (isAnnouncementSummary(event.summary)) {
       announcement = event.summary;
       break;
