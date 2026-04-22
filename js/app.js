@@ -276,18 +276,12 @@ function tickTemporal(now) {
     const isLastBlock = status.status === 'period' && !status.nextBlock && !status.currentTracks;
     const suffix = isLastBlock ? 'remaining' : 'until next block';
 
-    if (totalSeconds < 300) {
-      // Under 5 minutes — show minutes and seconds
-      const m = Math.floor(totalSeconds / 60);
-      const s = totalSeconds % 60;
-      const timeStr = m > 0
-        ? `${m}m ${String(s).padStart(2, '0')}s`
-        : `${s}s`;
-      els.countdownText.textContent = `${timeStr} ${suffix}`;
-    } else {
-      const mins = Math.ceil(totalSeconds / 60);
-      els.countdownText.textContent = `${mins} minutes ${suffix}`;
-    }
+    const m = Math.floor(totalSeconds / 60);
+    const s = totalSeconds % 60;
+    const timeStr = m > 0
+      ? `${m}m ${String(s).padStart(2, '0')}s`
+      : `${s}s`;
+    els.countdownText.textContent = `${timeStr} ${suffix}`;
     els.countdownText.classList.add('now-header__countdown--active');
   }
 }
