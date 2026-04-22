@@ -100,9 +100,30 @@ function timeToMinutes(hhmm) {
 }
 
 /**
- * Extract block number from block_name (e.g., "Block 1" → "1", "Upper Lunch" → null).
+ * Extract the active block numbers from a raw SUMMARY string.
+ * "RED: B. 1, 3, 5, 7" → ['1','3','5','7']
+ * Returns null if no block list found.
  */
-function extractBlockNumber(blockName) {
+function extractActiveBlocks(summary) {
+  if (!summary) return null;
+  const match = summary.match(/B\.\s*([\d,\s]+)$/);
+  if (!match) return null;
+  return match[1].split(',').map(s => s.trim());
+}
+
+/**
+ * Extract block number from block_name (e.g., "Block 1" → "1", "Upper Lunch" → null).
+ * For paired blocks like "Block 1/2", picks the number that's in activeBlocks.
+ */
+function extractBlockNumber(blockName, activeBlocks) {
+  // Paired block: "Block 1/2" → pick the active one
+  const pairMatch = blockName.match(/^Block\s+(\d)\/(\d)/i);
+  if (pairMatch) {
+    const [, a, b] = pairMatch;
+    if (activeBlocks && activeBlocks.includes(b)) return b;
+    if (activeBlocks && activeBlocks.includes(a)) return a;
+    return a; // fallback
+  }
   const match = blockName.match(/^Block\s+(\d)/i);
   return match ? match[1] : null;
 }
@@ -178,7 +199,7 @@ function renderDeviation(resolved) {
 // Stored references for tick updates
 let blockElements = []; // { block, element }
 
-function renderBlocks(template, personal) {
+function renderBlocks(template, personal, activeBlocks) {
   const list = els.blocksList;
   list.innerHTML = '';
   blockElements = [];
@@ -198,7 +219,7 @@ function renderBlocks(template, personal) {
     const infoDiv = document.createElement('div');
     infoDiv.className = 'now-block__info';
 
-    const blockNum = extractBlockNumber(block.block_name);
+    const blockNum = extractBlockNumber(block.block_name, activeBlocks);
     const personalData = blockNum && personal ? personal[blockNum] : null;
 
     const nameDiv = document.createElement('div');
@@ -292,6 +313,7 @@ function tickTemporal(now) {
 
 let currentPayload = null;
 let currentResolved = null;
+let currentActiveBlocks = null;
 
 function renderStable(now) {
   els.headerDate.textContent = DATE_FMT.format(now);
@@ -337,7 +359,8 @@ function renderStable(now) {
   els.dayLabel.textContent = label;
 
   const personal = loadPersonalSchedule();
-  renderBlocks(currentResolved.template, personal);
+  currentActiveBlocks = extractActiveBlocks(rawSummary);
+  renderBlocks(currentResolved.template, personal, currentActiveBlocks);
   els.personalizeSection.hidden = false;
 }
 
@@ -418,7 +441,7 @@ function toggleEditPanel() {
     savePersonalSchedule(data);
     panel.remove();
     if (currentResolved && currentResolved.template) {
-      renderBlocks(currentResolved.template, loadPersonalSchedule());
+      renderBlocks(currentResolved.template, loadPersonalSchedule(), currentActiveBlocks);
       tickTemporal(new Date());
     }
   });
@@ -427,7 +450,7 @@ function toggleEditPanel() {
     savePersonalSchedule(null);
     panel.remove();
     if (currentResolved && currentResolved.template) {
-      renderBlocks(currentResolved.template, null);
+      renderBlocks(currentResolved.template, null, currentActiveBlocks);
       tickTemporal(new Date());
     }
   });
