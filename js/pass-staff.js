@@ -153,8 +153,9 @@ async function showDashboard() {
   // Fetch games (or use demo data)
   const result = DEMO_MODE ? demoGames() : await getTodaysGames();
 
-  // Staleness banner
-  if (result.isStale) {
+  // Staleness banner — only show when there IS data but it's old.
+  // No lastUpdated means scraper hasn't run yet; don't show a confusing empty banner.
+  if (result.isStale && result.lastUpdated) {
     els.staleBanner.hidden = false;
     els.staleText.textContent = `Data may be stale (last updated ${relativeTimeAgo(result.lastUpdated)})`;
   }
