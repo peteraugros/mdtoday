@@ -859,6 +859,11 @@
   animation: pin-shake 150ms ease-out;
 }
 
+.staff-pin__input.is-success {
+  border-color: var(--md-success);
+  color: var(--md-success);
+}
+
 @keyframes pin-shake {
   0%, 100% { transform: translateX(0); }
   25% { transform: translateX(-4px); }

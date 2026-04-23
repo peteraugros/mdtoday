@@ -13,6 +13,7 @@ const $ = id => document.getElementById(id);
 const els = {
   pinSection: $('pin-section'),
   pinInput: $('pin-input'),
+  pinLabel: $('pin-label'),
   dashboard: $('dashboard-section'),
   dashboardDate: $('dashboard-date'),
   gamesList: $('games-list'),
@@ -33,7 +34,10 @@ function showPin() {
     if (els.pinInput.value.length === PIN_LENGTH) {
       if (els.pinInput.value === PIN_VALUE) {
         trustDevice();
-        showDashboard();
+        els.pinInput.disabled = true;
+        els.pinLabel.textContent = 'Access granted';
+        els.pinInput.classList.add('is-success');
+        setTimeout(showDashboard, 600);
       } else {
         // Wrong PIN — shake + clear
         els.pinInput.classList.add('is-wrong');
