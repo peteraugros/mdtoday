@@ -209,3 +209,12 @@ if (isTrusted()) {
 } else {
   showPin();
 }
+
+// Handle bfcache — browser may restore a stale DOM on back-navigation.
+// Re-check trust and force the correct state.
+window.addEventListener('pageshow', (e) => {
+  if (e.persisted && isTrusted()) {
+    els.pinSection.hidden = true;
+    els.dashboard.hidden = false;
+  }
+});
