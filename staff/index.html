@@ -35,6 +35,15 @@
 
     <!-- Dashboard — visible only when trusted -->
     <main class="staff-dashboard" id="dashboard-section" style="display:none">
+      <!-- Staleness banner -->
+      <div class="staff-stale" id="stale-banner" hidden>
+        <span class="staff-stale__icon">&#x26A0;</span>
+        <span class="staff-stale__text" id="stale-text"></span>
+      </div>
+
+      <div class="staff-dashboard__heading" id="dashboard-date"></div>
+      <ul class="staff-games" id="games-list"></ul>
+      <div class="staff-empty" id="games-empty" hidden>No dismissals scheduled today.</div>
     </main>
 
     <script>
