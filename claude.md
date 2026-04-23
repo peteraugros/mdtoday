@@ -1223,4 +1223,96 @@ This statement serves as the guiding principle for all product and strategic dec
 
 ---
 
+## Monetization Strategy & Free-to-Paid Transition (April 2026)
+
+### Current thinking
+
+MD Today will initially monetize through a percentage of school-related transactions (such as merchandise), while long-term sustainability will come from institutional adoption as a core operational platform.
+
+### Assessment of merch % model
+
+**Strengths:**
+- Aligned with usage (more engagement → more sales)
+- Easy for admin to say yes to (no upfront cost)
+- Proves you're thinking beyond just building
+
+**Weaknesses:**
+- Indirect — you don't control the revenue stream
+- Small — merch sales won't justify the value you're creating
+- Avoidable — school can just not route sales through you later
+
+**Risk:** Building something essential and getting paid like it's optional.
+
+### Reframing: merch % is proof of value, not the business model
+
+**1. Primary revenue (later, once they depend on it):**
+School pays for MD Today as infrastructure.
+- Per student: ~$3–$10/student/year → $6,000–$20,000/year at ~2,000 students (cleanest)
+- Flat annual license: Small school $5k, Mid $10k, Large/private $15–25k (admin prefers predictable)
+
+**2. Secondary revenue (what's already proposed):**
+- % of merch sales
+- Extensible later to: event tickets, donations, fundraisers
+
+**3. Optional expansion (future):**
+- Premium features for athletics, analytics, etc.
+
+### Why they would actually pay
+
+You need to be able to say (and eventually prove):
+- "This runs dismissal"
+- "Students actually check this daily"
+- "This replaces confusion across X systems"
+- "This increases engagement in athletics/events"
+
+Once even one of those is true, you're no longer optional.
+
+### The free-to-paid transition (5 phases)
+
+**Phase 1: Free, but essential (now)**
+Roll it out. Get adoption. Let it quietly become part of the day. You're not selling anything yet. You're building: "we use MD Today."
+
+**Phase 2: Prove value with data**
+This is where GoatCounter pays off. Walk into admin with:
+- "78% of students used it this week"
+- "Dismissal traffic peaks at 3:10 daily"
+- "Students check it before games"
+
+Now it's not "I built something cool." It's "This is already part of your school."
+
+**Phase 3: Soft positioning (not a pitch)**
+Don't say "pay me." Say something like: "I want to keep building this out properly — parent view, athletics, full integration — but that probably means formalizing it as a supported system."
+
+You're inviting them into the next level.
+
+**Phase 4: Frame the decision correctly**
+Don't frame it as: "Do you want to buy this?"
+Frame it as: "Do you want this to become an official system at the school?"
+Money becomes a detail, not the decision.
+
+**Phase 5: Give them an easy yes**
+Example: "We could structure it at about $5 per student annually, which would let me maintain and expand it properly."
+That sounds reasonable, already thought through, not aggressive.
+
+### The real leverage point
+
+Your power moment is when this becomes true:
+- Teachers expect it
+- Students check it
+- Admin references it
+
+At that point, the question is no longer "Should we pay?" — it becomes "We can't lose this — how do we support it?"
+
+### What to track right now (your receipts)
+
+As you roll this out, quietly start tracking:
+- % of students onboarded
+- Daily usage
+- Dismissal usage specifically
+- Any moment where someone says "this helped"
+
+Those become the evidence for the Phase 2 conversation.
+
+---
+
 *MD Today — Mater Dei High School, Santa Ana*
