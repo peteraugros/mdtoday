@@ -1189,4 +1189,38 @@ Only port these after v1 has proven adoption and stability:
 
 ---
 
+## Vision Alignment — MD Today (April 2026)
+
+The principal responded with strong enthusiasm to MD Today, validating early product-market fit and signaling real institutional interest. Initial student onboarding has begun, and traction is emerging organically.
+
+The broader vision is expanding to include role-based views (student, teacher, coach, parent, etc.) along with future features such as game engagement and monetization pathways. However, the current phase is not about rapid feature expansion, but about clarifying and solidifying the vision.
+
+The focus has shifted from building to articulation—moving the idea from a "mushy" internal state to a clearly defined and communicable system, with a realistic 6–12 month development horizon.
+
+### Core Insight
+
+Schools already possess valuable systems and information, but these resources are fragmented across platforms and go underutilized because they are difficult to access.
+
+### Positioning
+
+MD Today does not aim to replace existing systems. It serves as a unifying access layer that brings those systems into one place.
+
+### Launch Strategy
+
+Initial rollout will be simple and direct:
+
+- QR code distribution at lunch
+- Immediate access via mobile
+- Usage tracking through GoatCounter
+
+This enables real data collection (adoption, engagement, usage patterns) to present to administration.
+
+### North Star
+
+> "MD Today unifies the scattered systems of school life into one simple app that students actually use."
+
+This statement serves as the guiding principle for all product and strategic decisions moving forward.
+
+---
+
 *MD Today — Mater Dei High School, Santa Ana*
