@@ -980,12 +980,81 @@ After Phase 5 shipped, did a brand+UX refactor across all three views. Not numbe
 - **iOS-native PWA splash image** (separate from the in-app splash). Currently a PWA cold launch from home screen shows a white screen until the HTML parses; a proper `<link rel="apple-touch-startup-image">` set would brand that gap. Real ticket, blocked on generating a per-device-size image set.
 - **Splash skip toggle** in a future settings page so students can disable the brand moment entirely if it becomes annoying after first-week novelty wears off.
 
-### Phase 6: Deploy
+### Phase 6: Deploy — ✅ COMPLETE
 
-1. Push to GitHub
-2. Enable GitHub Pages (or Netlify / Cloudflare Pages)
-3. Share URL with three students for a week of real-world testing before wider launch
-4. Log the iCal URL rotation task: **every June, check if the URL has rolled over to the next school year, and update the constant in `data.js` accordingly.**
+1. ✅ Live at `https://mdtoday.netlify.app` — GitHub-connected auto-deploy from `main`, no build step, publish directory is repo root
+2. ✅ iCal proxy migrated from `corsproxy.io` to a same-origin Netlify Function (`/.netlify/functions/ical`) — eliminates the third-party CORS dependency that was Risk 4 in the Launch Risk Register
+3. ✅ June rotation task logged: every June, check if Mater Dei has rolled over to the next school year's iCal URL, and update the `ICAL_TARGET` constant in `netlify/functions/ical.js` (moved from `js/data.js` during the proxy migration)
+4. ⏸ Three-student soft launch — URL ready to share, pending selection of three students for a week of real-world testing before wider launch
+
+**Ship criterion:** ✅ MET on 2026-04-21. Verified on iPhone PWA (Safari → Add to Home Screen): splash plays, Now view renders Confirmed state on real Mater Dei data, Schedule and Days Off views render correctly, trust-state transitions visible (Confirmed → Stale after 12h cache aging shim), bottom navbar active states per view. Final cache version at session close: `v1.0.6`.
+
+### Phase 6 implementation notes
+
+- **Netlify Function for iCal proxy.** Lives at `netlify/functions/ical.js`, ~34 lines. Same-origin request from the app means no CORS headers needed — cleaner than the original cross-origin pattern. `ICAL_TARGET` is hardcoded to Mater Dei's feed, making this a closed proxy (can't be abused for arbitrary URLs). 30-minute `Cache-Control: max-age` on responses, sitting inside Netlify's edge — client-side `localStorage` cache continues to sit in front of this, so two layers of caching (edge + client) with the trust state derived from the client-side `lastFetch` timestamp.
+- **`js/data.js` change is one line.** `ICAL_URL` flipped from the `corsproxy.io` URL-encoded wrapper to the plain relative path `'/.netlify/functions/ical'`. Surgical change, left the surrounding comment block intact (though the comment's pointer to "claude.md → Data Sources → Live URLs" is now slightly stale — the live URL there is no longer the literal fetched URL, the function file is).
+- **Schedule table responsive fix — track column hidden on narrow viewports.** The Schedule view's three-column table (Time / Block / Track) was overflowing on iPhone widths. Fix: `@media (max-width: 600px) { .schedule-table__track { display: none; } }` in `css/styles.css`. The Track column is redundant at this viewport anyway — the block_name already encodes track info ("Block 5/6 (Lower Class)", "Upper Lunch", "Lower Lunch") — so hiding it resolves the redundancy in favor of the more descriptive source. Column remains visible on iPad and desktop where there's room.
+- **Cache version progression in this session:** `v1.0.2` (Brand pass, carry-in) → `v1.0.3` (Netlify Function migration) → `v1.0.4` (first track-column attempt) → `v1.0.5` (second track-column attempt) → `v1.0.6` (final track-column breakpoint). Four commits on the main branch, lockstep discipline held on every bump. The sequence is a record of one real architectural change (the proxy) and three iterations to land one CSS fix.
+- **Cloudflare Worker at `mdtoday-ical-proxy.peteraugros.workers.dev` exists as a cold spare.** Deployed during Phase 6 but not the active proxy. Free tier, costs $0/month. Can be deleted or kept as a manual failover — if Netlify Functions ever breaks, flipping `ICAL_URL` back to the Worker URL is a one-line change.
+
+**v1.1 candidates surfaced during Phase 6:**
+
+- **Delete the Cloudflare Worker** or keep as documented failover. Low priority, zero cost either way.
+- **Update the `js/data.js` header comment** to reflect that the actual iCal URL now lives in `netlify/functions/ical.js`, and update the June-rotation reminder comment to point at the function file. Not urgent — the reminder still works, just points at the wrong file.
+- **Verify `mass` template bell times** — during Phase 6 smoke testing, the April 21 Mass-day schedule showed Block 5/6 (Lower Class) at 12:00–1:00 PM overlapping Upper Classes at 12:45–1:45 PM, plus an Office Hour / PLC / PD slot at 3:00–3:30 PM that wasn't on the radar. May be correct for the `mass` template as defined in the sheet; worth a sheet review to confirm, since this is the first time the Mass schedule was rendered against live production data.
+- **iOS-native PWA splash image** (still deferred from Phase 4, carried forward). Currently a PWA cold launch from home screen shows a white flash before the in-app splash plays. A proper `<link rel="apple-touch-startup-image">` set would brand that gap.
+
+---
+
+## Pass App (Staff Dismissal Tool) — added 2026-04-23
+
+The Pass App is a staff-facing dismissal tool at `/staff/`. Same repo, same deploy, same domain. PIN-gated, device-trust persisted in localStorage.
+
+### File structure (additions only)
+
+```
+staff/
+├── index.html              ← PIN entry + staff dashboard
+└── dismiss.html            ← Sport detail: roster + dismissal actions
+js/
+├── pass-db.js              ← Dexie setup, schema, typed CRUD
+├── pass-data.js            ← Fetch athletics-data JSON + Sheet overrides, merge
+├── pass-trust.js           ← Device trust check (localStorage flag)
+├── pass-staff.js           ← /staff/index.html entry point
+└── pass-dismiss.js         ← /staff/dismiss.html entry point
+netlify/functions/
+├── athletics-data.js       ← Scheduled daily scraper (3am Pacific cron)
+└── package.json            ← cheerio dependency
+netlify.toml                ← Cron schedule config
+```
+
+### Key architectural decisions
+
+- **UI state reflects Dexie. Always.** ACTIVE and DISMISSED lists derive from `Dexie.liveQuery()`, never local state. No optimistic updates.
+- **Un-dismiss is tap-on-dismissed-name.** No toast, no confirmation modal. Symmetric with dismiss (one tap each direction).
+- **Three-layer data merge:** game_overrides → scraper → sport_defaults → hide (no dismissal time = don't show).
+- **Scraper boundary:** writes to Netlify Blobs only, never to the Google Sheet. Sheet is human-override territory.
+- **5-tap hidden gesture** on the "MD Today" header brand navigates to `/staff/`. This is how teachers reach the PIN gate from inside the installed PWA (no address bar). `touch-action: manipulation` prevents zoom.
+- **Floating key icon (FAB)** appears bottom-right on all student views only after device trust is established.
+- **PIN gate uses blocking `<script>` in `<head>`** to prevent flash of PIN section on trusted devices (bfcache, back-navigation).
+- **Demo mode (`?demo`)** injects fake games for testing. Remove before production launch.
+
+### Student-facing files modified by Pass App
+
+- `js/app.js` — 10-line redirect block at top (trusted devices on `/` → `/staff/`)
+- `index.html`, `upcoming.html`, `sports.html`, `daysoff.html` — inline script for FAB + 5-tap gesture
+- `css/styles.css` — staff styles appended under `/* Pass App (Staff) */` header
+
+All other student-facing JS modules are untouched.
+
+### Google Sheet tabs needed (not yet created)
+
+Three new tabs in the existing MD Today sheet:
+- `sport_defaults` — coach policy dismissal times per sport/level
+- `manual_rosters` — rosters for sports without roster pages on athletics site
+- `game_overrides` — per-game dismissal time overrides
+
+Placeholder gid values in `js/pass-data.js` (lines ~18-23) need updating with real gids after tabs are created.
 
 ---
 
@@ -1005,7 +1074,10 @@ After Phase 5 shipped, did a brand+UX refactor across all three views. Not numbe
 12. **Update this `claude.md` file at the end of each session** with notable changes, gotchas, and new conventions.
 13. **Every implementation decision is either preserving or weakening the core invariant** ("every display state includes both the schedule and its confidence level"). If a change doesn't preserve it, don't make the change — even if it looks nicer, feels cleaner, or saves code. The invariant is load-bearing; the rest is details.
 14. **When debugging module-loading weirdness in Safari, empty the cache.** `Develop → Empty Caches` (or `Cmd+Option+E`) before assuming the code is wrong. Safari aggressively caches ES modules between edits, and `Cmd+Shift+R` does not always clear them. Lost ~20 minutes of Phase 2 debugging to this once; symptom was "page stuck on LOADING… but no console errors, and `import('./js/app.js')` in console succeeds." If the file on disk is correct and `wc -l` confirms it's non-empty, the problem is Safari's cache, not the code.
-15. **"Phase N says create file X" in the spec ≠ "file X does not exist on disk."** Empty stub files are common in early-phase scaffolding (this has happened at least twice — `countdown.js` before Phase 2's correction, `sw.js` + `manifest.json` before Phase 4). Before any phase that introduces new files, run `ls -la` or `git ls-files` + `wc -l` on each named target. "Create X" in the spec means "fill X," not "assume X doesn't exist." The consequence of assuming wrong is overwriting real work with no recovery path.
+15. **"Phase N says create file X" in the spec ≠ "file X does not exist on disk."**
+16. **CSS `display` values override the `hidden` attribute.** If a CSS rule sets `display: flex` (or any explicit display), the HTML `hidden` attribute is silently ignored. Use `style.display = 'none'` / `style.display = ''` instead of `.hidden` when CSS declares a display value. This burned us on the staff stale banner.
+17. **iOS PWA localStorage is separate from Safari.** Adding to Home Screen creates a new browsing context with its own localStorage. Trust flags, personal schedules, and any other localStorage state set in Safari do NOT carry over. The 5-tap gesture exists specifically so teachers can reach `/staff/` and enter the PIN from inside the PWA context.
+18. **The `hidden` attribute pattern is unreliable when CSS sets `display`.** Prefer `style.display` toggling for any element that has an explicit `display` value in CSS. The `hidden` attribute works fine for elements with no CSS display override. Empty stub files are common in early-phase scaffolding (this has happened at least twice — `countdown.js` before Phase 2's correction, `sw.js` + `manifest.json` before Phase 4). Before any phase that introduces new files, run `ls -la` or `git ls-files` + `wc -l` on each named target. "Create X" in the spec means "fill X," not "assume X doesn't exist." The consequence of assuming wrong is overwriting real work with no recovery path.
 
 ---
 
