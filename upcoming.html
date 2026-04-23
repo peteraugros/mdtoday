@@ -144,14 +144,29 @@
     })();
   </script>
   <script>
+    // Staff access: floating button for trusted devices, 5-tap gesture for first-time setup.
     (function () {
-      try { if (localStorage.getItem('trusted_device') !== 'true') return; } catch (e) { return; }
-      var btn = document.createElement('a');
-      btn.href = '/staff/';
-      btn.className = 'staff-fab';
-      btn.setAttribute('aria-label', 'Staff dismissals');
-      btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.78 7.78 5.5 5.5 0 0 1 7.78-7.78zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>';
-      document.body.appendChild(btn);
+      try {
+        if (localStorage.getItem('trusted_device') === 'true') {
+          var btn = document.createElement('a');
+          btn.href = '/staff/';
+          btn.className = 'staff-fab';
+          btn.setAttribute('aria-label', 'Staff dismissals');
+          btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.78 7.78 5.5 5.5 0 0 1 7.78-7.78zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>';
+          document.body.appendChild(btn);
+        }
+      } catch (e) {}
+      var brand = document.querySelector('.page-header__brand');
+      if (!brand) return;
+      brand.style.touchAction = 'manipulation';
+      var taps = 0, timer;
+      brand.addEventListener('click', function (e) {
+        e.preventDefault();
+        taps++;
+        clearTimeout(timer);
+        if (taps >= 5) { taps = 0; window.location.href = '/staff/'; return; }
+        timer = setTimeout(function () { taps = 0; }, 1500);
+      });
     })();
   </script>
   <script data-goatcounter="https://mdtoday.goatcounter.com/count"
