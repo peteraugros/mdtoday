@@ -12,8 +12,7 @@ const $ = id => document.getElementById(id);
 
 const els = {
   pinSection: $('pin-section'),
-  pinDisplay: $('pin-display'),
-  pinKeypad: $('pin-keypad'),
+  pinInput: $('pin-input'),
   dashboard: $('dashboard-section'),
   dashboardDate: $('dashboard-date'),
   gamesList: $('games-list'),
@@ -26,54 +25,24 @@ const els = {
 // PIN entry
 // ---------------------------------------------------------------------------
 
-let pinBuffer = '';
-
-function renderPinDots() {
-  els.pinDisplay.innerHTML = '';
-  for (let i = 0; i < PIN_LENGTH; i++) {
-    const dot = document.createElement('span');
-    dot.className = 'staff-pin__dot' + (i < pinBuffer.length ? ' is-filled' : '');
-    els.pinDisplay.appendChild(dot);
-  }
-}
-
-function handlePinKey(key) {
-  if (key === 'back') {
-    pinBuffer = pinBuffer.slice(0, -1);
-    renderPinDots();
-    return;
-  }
-
-  if (pinBuffer.length >= PIN_LENGTH) return;
-  pinBuffer += key;
-  renderPinDots();
-
-  // Auto-submit at PIN_LENGTH
-  if (pinBuffer.length === PIN_LENGTH) {
-    if (pinBuffer === PIN_VALUE) {
-      trustDevice();
-      showDashboard();
-    } else {
-      // Wrong PIN — shake + clear
-      els.pinDisplay.classList.add('is-wrong');
-      els.pinDisplay.addEventListener('animationend', () => {
-        els.pinDisplay.classList.remove('is-wrong');
-        pinBuffer = '';
-        renderPinDots();
-      }, { once: true });
-    }
-  }
-}
-
 function showPin() {
   els.pinSection.hidden = false;
   els.dashboard.hidden = true;
-  renderPinDots();
 
-  els.pinKeypad.addEventListener('click', e => {
-    const btn = e.target.closest('[data-key]');
-    if (!btn) return;
-    handlePinKey(btn.dataset.key);
+  els.pinInput.addEventListener('input', () => {
+    if (els.pinInput.value.length === PIN_LENGTH) {
+      if (els.pinInput.value === PIN_VALUE) {
+        trustDevice();
+        showDashboard();
+      } else {
+        // Wrong PIN — shake + clear
+        els.pinInput.classList.add('is-wrong');
+        els.pinInput.addEventListener('animationend', () => {
+          els.pinInput.classList.remove('is-wrong');
+          els.pinInput.value = '';
+        }, { once: true });
+      }
+    }
   });
 }
 

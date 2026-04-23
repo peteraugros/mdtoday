@@ -827,31 +827,35 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: var(--spacing-lg);
+  gap: var(--spacing-md);
   padding: var(--spacing-xl) 0;
 }
 
-.staff-pin__display {
-  display: flex;
-  gap: var(--spacing-md);
-  justify-content: center;
+.staff-pin__label {
+  font-size: 0.875rem;
+  color: var(--md-gray-text-muted);
 }
 
-.staff-pin__dot {
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
+.staff-pin__input {
+  font-family: inherit;
+  font-size: 1.5rem;
+  font-weight: 600;
+  letter-spacing: 0.15em;
+  text-align: center;
+  width: 200px;
+  padding: var(--spacing-md);
   border: 2px solid var(--md-gray-border);
-  background: transparent;
-  transition: background 0.1s ease, border-color 0.1s ease;
+  border-radius: var(--radius);
+  background: var(--md-gray-surface);
+  color: var(--md-gray-text);
 }
 
-.staff-pin__dot.is-filled {
-  background: var(--md-red);
+.staff-pin__input:focus {
+  outline: none;
   border-color: var(--md-red);
 }
 
-.staff-pin__display.is-wrong {
+.staff-pin__input.is-wrong {
   animation: pin-shake 150ms ease-out;
 }
 
@@ -859,41 +863,6 @@
   0%, 100% { transform: translateX(0); }
   25% { transform: translateX(-4px); }
   75% { transform: translateX(4px); }
-}
-
-.staff-pin__keypad {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: var(--spacing-sm);
-  max-width: 280px;
-  width: 100%;
-}
-
-.staff-pin__key {
-  height: 64px;
-  font-size: 1.5rem;
-  font-weight: 600;
-  font-family: inherit;
-  border: none;
-  border-radius: var(--radius);
-  background: var(--md-gray-surface);
-  color: var(--md-gray-text);
-  cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
-}
-
-.staff-pin__key:active {
-  background: var(--md-gray-bg);
-}
-
-.staff-pin__key--empty {
-  visibility: hidden;
-}
-
-.staff-pin__key--back {
-  font-size: 1.25rem;
-  color: var(--md-gray-text-muted);
 }
 
 /* --- Staff dashboard --- */

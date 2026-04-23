@@ -22,21 +22,10 @@
 
     <!-- PIN gate -->
     <section class="staff-pin" id="pin-section" hidden>
-      <div class="staff-pin__display" id="pin-display"></div>
-      <div class="staff-pin__keypad" id="pin-keypad">
-        <button class="staff-pin__key" data-key="1">1</button>
-        <button class="staff-pin__key" data-key="2">2</button>
-        <button class="staff-pin__key" data-key="3">3</button>
-        <button class="staff-pin__key" data-key="4">4</button>
-        <button class="staff-pin__key" data-key="5">5</button>
-        <button class="staff-pin__key" data-key="6">6</button>
-        <button class="staff-pin__key" data-key="7">7</button>
-        <button class="staff-pin__key" data-key="8">8</button>
-        <button class="staff-pin__key" data-key="9">9</button>
-        <button class="staff-pin__key staff-pin__key--empty" disabled></button>
-        <button class="staff-pin__key" data-key="0">0</button>
-        <button class="staff-pin__key staff-pin__key--back" data-key="back">&larr;</button>
-      </div>
+      <label class="staff-pin__label" for="pin-input">Enter access code</label>
+      <input class="staff-pin__input" id="pin-input" type="text"
+             maxlength="6" autocomplete="off" autocapitalize="off" spellcheck="false"
+             autofocus>
     </section>
 
     <!-- Dashboard (visible after trust) -->
