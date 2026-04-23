@@ -158,9 +158,9 @@ async function showDashboard() {
   if (result.isStale && result.lastUpdated && els.staleBanner && els.staleText) {
     const msg = `Data may be stale (last updated ${relativeTimeAgo(result.lastUpdated)})`;
     els.staleText.textContent = msg;
-    els.staleBanner.hidden = false;
+    els.staleBanner.style.display = 'flex';
   } else if (els.staleBanner) {
-    els.staleBanner.hidden = true;
+    els.staleBanner.style.display = 'none';
   }
 
   // Filter to games with dismissal times, sort by dismissal time
