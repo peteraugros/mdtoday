@@ -8,6 +8,18 @@
 //
 // Personal schedule overlay reads from localStorage and applies automatically.
 
+// Pass App redirect — scoped exception to student-purity rule.
+// Trusted devices land on /staff/ by default; explicit navigation to / respects user intent.
+import { isTrusted } from './pass-trust.js';
+
+if (
+  isTrusted() &&
+  !sessionStorage.getItem('mdt:forceStudent') &&
+  window.location.pathname === '/'
+) {
+  window.location.replace('/staff/');
+}
+
 import { loadData, isFresh } from './data.js';
 import { resolveDay } from './resolve.js';
 import { getCurrentStatus } from './schedule.js';

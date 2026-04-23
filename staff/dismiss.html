@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#B71C1C">
+  <title>MD Dismiss</title>
+  <link rel="apple-touch-icon" href="../icons/apple-touch-icon.png">
+  <link rel="icon" type="image/png" href="../icons/apple-touch-icon.png">
+  <link rel="stylesheet" href="../css/styles.css">
+</head>
+<body>
+  <div class="page">
+
+    <header class="page-header">
+      <div class="page-header__brand">
+        <img class="page-header__logo" src="../icons/md-wordmark.png" alt="" aria-hidden="true">
+        <span>MD Dismiss</span>
+      </div>
+      <a class="staff-header-back" href="/staff/">&larr; Back</a>
+    </header>
+
+    <main class="staff-dismiss" id="dismiss-main">
+      <!-- Sport header -->
+      <div class="staff-dismiss__header" id="dismiss-header">
+        <div class="staff-dismiss__sport" id="dismiss-sport">Loading&hellip;</div>
+        <div class="staff-dismiss__time" id="dismiss-time"></div>
+      </div>
+
+      <!-- ACTIVE list -->
+      <section class="staff-roster" id="active-section">
+        <h2 class="staff-roster__heading">Active</h2>
+        <ul class="staff-roster__list" id="active-list"></ul>
+      </section>
+
+      <!-- Add off-roster -->
+      <div class="staff-offroster" id="offroster-section">
+        <input class="staff-offroster__input" id="offroster-input"
+               type="text" placeholder="Student name (not on roster)" autocomplete="off">
+        <button class="staff-offroster__btn" id="offroster-btn" type="button">Dismiss</button>
+      </div>
+
+      <!-- DISMISSED list -->
+      <section class="staff-roster staff-roster--dismissed" id="dismissed-section">
+        <h2 class="staff-roster__heading">Dismissed <span class="staff-roster__count" id="dismissed-count"></span></h2>
+        <ul class="staff-roster__list" id="dismissed-list"></ul>
+      </section>
+    </main>
+
+    <!-- Toast -->
+    <div class="staff-toast" id="toast" hidden>
+      <span class="staff-toast__label">Undo last dismissal</span>
+      <button class="staff-toast__btn" id="toast-undo" type="button">Undo</button>
+    </div>
+
+  </div>
+
+  <script type="module" src="../js/pass-dismiss.js"></script>
+</body>
+</html>
