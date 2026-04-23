@@ -1,0 +1,2 @@
+[functions."athletics-data"]
+  schedule = "0 10 * * *"
