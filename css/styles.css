@@ -62,6 +62,7 @@
     line-height: 1.4;
     min-height: 100vh;
     padding: var(--spacing-md) var(--spacing-md) calc(var(--spacing-xl) + 72px + env(safe-area-inset-bottom));
+    touch-action: manipulation;
   }
 
   /* ---------------------------------------------------------------------------
