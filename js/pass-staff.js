@@ -155,9 +155,12 @@ async function showDashboard() {
 
   // Staleness banner — only show when there IS data but it's old.
   // No lastUpdated means scraper hasn't run yet; don't show a confusing empty banner.
-  if (result.isStale && result.lastUpdated) {
+  if (result.isStale && result.lastUpdated && els.staleBanner && els.staleText) {
+    const msg = `Data may be stale (last updated ${relativeTimeAgo(result.lastUpdated)})`;
+    els.staleText.textContent = msg;
     els.staleBanner.hidden = false;
-    els.staleText.textContent = `Data may be stale (last updated ${relativeTimeAgo(result.lastUpdated)})`;
+  } else if (els.staleBanner) {
+    els.staleBanner.hidden = true;
   }
 
   // Filter to games with dismissal times, sort by dismissal time

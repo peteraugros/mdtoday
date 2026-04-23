@@ -812,6 +812,30 @@
    DO NOT modify any existing rules above this line.
    ========================================================================= */
 
+/* --- Staff floating action button (trusted devices only, student views) --- */
+
+.staff-fab {
+  position: fixed;
+  top: var(--spacing-md);
+  right: var(--spacing-md);
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--md-red);
+  color: var(--md-white);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  text-decoration: none;
+  z-index: 20;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.staff-fab:active {
+  opacity: 0.8;
+}
+
 /* --- Staff header --- */
 
 .staff-header-back {
