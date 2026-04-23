@@ -864,6 +864,14 @@
   color: var(--md-success);
 }
 
+.staff-pin {
+  transition: opacity 2s ease-out;
+}
+
+.staff-pin.is-fading {
+  opacity: 0;
+}
+
 @keyframes pin-shake {
   0%, 100% { transform: translateX(0); }
   25% { transform: translateX(-4px); }

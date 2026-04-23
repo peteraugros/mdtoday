@@ -37,7 +37,11 @@ function showPin() {
         els.pinInput.disabled = true;
         els.pinLabel.textContent = 'Access granted';
         els.pinInput.classList.add('is-success');
-        setTimeout(showDashboard, 600);
+        // Hold 5s, then fade out over 2s, then show dashboard
+        setTimeout(() => {
+          els.pinSection.classList.add('is-fading');
+          els.pinSection.addEventListener('transitionend', () => showDashboard(), { once: true });
+        }, 5000);
       } else {
         // Wrong PIN — shake + clear
         els.pinInput.classList.add('is-wrong');
