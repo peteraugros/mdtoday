@@ -1005,6 +1005,12 @@
   font-weight: 400;
 }
 
+.staff-roster__hint {
+  font-size: 0.75rem;
+  color: var(--md-gray-text-muted);
+  padding: 0 var(--spacing-lg) var(--spacing-sm);
+}
+
 .staff-roster__list {
   list-style: none;
   padding: 0;
@@ -1105,38 +1111,3 @@
   opacity: 0.8;
 }
 
-/* --- Toast --- */
-
-.staff-toast {
-  position: fixed;
-  bottom: var(--spacing-lg);
-  left: 50%;
-  transform: translateX(-50%);
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-md);
-  padding: var(--spacing-md) var(--spacing-lg);
-  background: var(--md-gray-text);
-  color: var(--md-white);
-  border-radius: var(--radius);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-  z-index: 50;
-  white-space: nowrap;
-}
-
-.staff-toast__label {
-  font-size: 0.9375rem;
-}
-
-.staff-toast__btn {
-  font-family: inherit;
-  font-size: 0.875rem;
-  font-weight: 700;
-  padding: var(--spacing-xs) var(--spacing-sm);
-  border: none;
-  background: transparent;
-  color: var(--md-white);
-  text-decoration: underline;
-  cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
-}

@@ -62,8 +62,6 @@ const els = {
   dismissedCount: $('dismissed-count'),
   offrosterInput: $('offroster-input'),
   offrosterBtn: $('offroster-btn'),
-  toast: $('toast'),
-  toastUndo: $('toast-undo'),
 };
 
 // ---------------------------------------------------------------------------
@@ -74,8 +72,7 @@ const params = new URLSearchParams(window.location.search);
 const sport_id = params.get('sport_id');
 let roster = [];         // enriched roster rows with _key
 let dismissedKeys = new Set();  // UI-layer perf optimization
-let lastDismissalId = null;
-let toastTimer = null;
+// Toast removed — tap-on-dismissed-name is the only undo mechanism.
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -159,6 +156,9 @@ function render(dismissals) {
   }
 
   els.dismissedCount.textContent = sorted.length > 0 ? `(${sorted.length})` : '';
+  // Hint: tap name to undo
+  const hint = document.getElementById('dismissed-hint');
+  if (hint) hint.hidden = sorted.length === 0;
 }
 
 // ---------------------------------------------------------------------------
@@ -180,8 +180,7 @@ async function dismissRoster(row) {
     dismissed_by: 'teacher',
   };
 
-  const { id, isNew } = await addDismissal(record);
-  if (isNew) showToast(id);
+  await addDismissal(record);
 }
 
 async function dismissFreeText() {
@@ -199,35 +198,9 @@ async function dismissFreeText() {
     dismissed_by: 'teacher',
   };
 
-  const { id, isNew } = await addDismissal(record);
+  await addDismissal(record);
   els.offrosterInput.value = '';
-  if (isNew) showToast(id);
 }
-
-// ---------------------------------------------------------------------------
-// Toast / Undo (LOCK — see BUILD.md)
-// ---------------------------------------------------------------------------
-
-function showToast(id) {
-  lastDismissalId = id;
-  els.toast.hidden = false;
-
-  clearTimeout(toastTimer);
-  toastTimer = setTimeout(hideToast, 5000);
-}
-
-function hideToast() {
-  els.toast.hidden = true;
-  lastDismissalId = null;
-  clearTimeout(toastTimer);
-}
-
-els.toastUndo.addEventListener('click', async () => {
-  if (lastDismissalId != null) {
-    await deleteDismissal(lastDismissalId);
-  }
-  hideToast();
-});
 
 // ---------------------------------------------------------------------------
 // Off-roster input
