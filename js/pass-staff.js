@@ -27,8 +27,8 @@ const els = {
 // ---------------------------------------------------------------------------
 
 function showPin() {
-  els.pinSection.hidden = false;
-  els.dashboard.hidden = true;
+  els.pinSection.style.display = '';
+  els.dashboard.style.display = 'none';
 
   els.pinInput.addEventListener('input', () => {
     if (els.pinInput.value.length === PIN_LENGTH) {
@@ -137,8 +137,8 @@ function demoGames() {
 }
 
 async function showDashboard() {
-  els.pinSection.hidden = true;
-  els.dashboard.hidden = false;
+  els.pinSection.style.display = 'none';
+  els.dashboard.style.display = '';
 
   // Date heading
   const today = new Date();
@@ -210,11 +210,3 @@ if (isTrusted()) {
   showPin();
 }
 
-// Handle bfcache — browser may restore a stale DOM on back-navigation.
-// Re-check trust and force the correct state.
-window.addEventListener('pageshow', (e) => {
-  if (e.persisted && isTrusted()) {
-    els.pinSection.hidden = true;
-    els.dashboard.hidden = false;
-  }
-});

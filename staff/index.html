@@ -8,6 +8,12 @@
   <link rel="apple-touch-icon" href="../icons/apple-touch-icon.png">
   <link rel="icon" type="image/png" href="../icons/apple-touch-icon.png">
   <link rel="stylesheet" href="../css/styles.css">
+  <script>
+    // Blocking gate: decide PIN vs dashboard BEFORE body paints.
+    // Prevents flash of PIN on trusted devices (including bfcache restore).
+    var __trusted = false;
+    try { __trusted = localStorage.getItem('trusted_device') === 'true'; } catch(e) {}
+  </script>
 </head>
 <body>
   <div class="page">
@@ -20,16 +26,26 @@
       <a class="staff-header-back" href="/" data-staff-to-student>&larr; Student view</a>
     </header>
 
-    <!-- PIN gate -->
-    <section class="staff-pin" id="pin-section" hidden>
+    <!-- PIN gate — visible only when NOT trusted -->
+    <section class="staff-pin" id="pin-section" style="display:none">
       <label class="staff-pin__label" id="pin-label" for="pin-input">Enter access code</label>
       <input class="staff-pin__input" id="pin-input" type="password"
-             maxlength="6" autocomplete="off" inputmode="text"
-             autofocus>
+             maxlength="6" autocomplete="off" inputmode="text">
     </section>
 
-    <!-- Dashboard (visible after trust) -->
-    <main class="staff-dashboard" id="dashboard-section" hidden>
+    <!-- Dashboard — visible only when trusted -->
+    <main class="staff-dashboard" id="dashboard-section" style="display:none">
+    </main>
+
+    <script>
+      // Immediately show the correct section — no FOUC, no waiting for module JS.
+      if (__trusted) {
+        document.getElementById('dashboard-section').style.display = '';
+      } else {
+        document.getElementById('pin-section').style.display = '';
+        document.getElementById('pin-input').setAttribute('autofocus', '');
+      }
+    </script>
       <!-- Staleness banner -->
       <div class="staff-stale" id="stale-banner" hidden>
         <span class="staff-stale__icon">&#x26A0;</span>
