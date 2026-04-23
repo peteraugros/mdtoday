@@ -68,6 +68,70 @@ function formatTime12(hhmm) {
   return `${hour12}:${String(m).padStart(2, '0')} ${period}`;
 }
 
+// ---------------------------------------------------------------------------
+// Demo mode — activated via ?demo in the URL
+// Injects fake games so the full flow is testable on days with no real games.
+// Remove before production launch.
+// ---------------------------------------------------------------------------
+
+const DEMO_MODE = new URLSearchParams(window.location.search).has('demo');
+
+function demoGames() {
+  const today = new Date();
+  const y = today.getFullYear();
+  const m = String(today.getMonth() + 1).padStart(2, '0');
+  const d = String(today.getDate()).padStart(2, '0');
+  const dateStr = `${y}-${m}-${d}`;
+
+  return {
+    games: [
+      {
+        date: dateStr, sport_slug: 'baseball', sport_name: 'Baseball',
+        level: 'Varsity', opponent: 'JSerra Catholic', home_away: 'away',
+        game_time: '15:30', dismissal_time: '13:30',
+        sport_id: 'baseball_varsity', summary: 'V Baseball @ JSerra',
+      },
+      {
+        date: dateStr, sport_slug: 'soccer-girls', sport_name: 'Soccer, Girls',
+        level: 'Varsity', opponent: 'Santa Margarita', home_away: 'home',
+        game_time: '17:00', dismissal_time: '15:00',
+        sport_id: 'soccer-girls_varsity', summary: 'V Soccer, Girls vs Santa Margarita',
+      },
+      {
+        date: dateStr, sport_slug: 'basketball-boys', sport_name: 'Basketball, Boys',
+        level: 'JV Red', opponent: 'St. John Bosco', home_away: 'away',
+        game_time: '16:00', dismissal_time: '14:00',
+        sport_id: 'basketball-boys_jv_red', summary: 'JV Red Basketball, Boys @ St. John Bosco',
+      },
+    ],
+    getRoster: (sport_id) => {
+      const rosters = {
+        'baseball_varsity': [
+          { display_name: 'Orlando Castano', name_slug: 'orlando-castano', jersey: '12' },
+          { display_name: 'Marcus Rivera', name_slug: 'marcus-rivera', jersey: '7' },
+          { display_name: 'Jake Thompson', name_slug: 'jake-thompson', jersey: '23' },
+          { display_name: 'Ryan Nguyen', name_slug: 'ryan-nguyen', jersey: '4' },
+          { display_name: 'Alex Garcia', name_slug: 'alex-garcia', jersey: '15' },
+        ],
+        'soccer-girls_varsity': [
+          { display_name: 'Sofia Martinez', name_slug: 'sofia-martinez', jersey: '10' },
+          { display_name: 'Emma Wilson', name_slug: 'emma-wilson', jersey: '3' },
+          { display_name: 'Mia Chen', name_slug: 'mia-chen', jersey: '8' },
+        ],
+        'basketball-boys_jv_red': [
+          { display_name: 'Tyler Brooks', name_slug: 'tyler-brooks', jersey: '11' },
+          { display_name: 'Daniel Park', name_slug: 'daniel-park', jersey: '22' },
+          { display_name: 'Alex Garcia', name_slug: null, jersey: null },
+          { display_name: 'Alex Garcia', name_slug: null, jersey: null },
+        ],
+      };
+      return rosters[sport_id] || [];
+    },
+    isStale: false,
+    lastUpdated: new Date().toISOString(),
+  };
+}
+
 async function showDashboard() {
   els.pinSection.hidden = true;
   els.dashboard.hidden = false;
@@ -78,8 +142,8 @@ async function showDashboard() {
     weekday: 'long', month: 'long', day: 'numeric',
   });
 
-  // Fetch games
-  const result = await getTodaysGames();
+  // Fetch games (or use demo data)
+  const result = DEMO_MODE ? demoGames() : await getTodaysGames();
 
   // Staleness banner
   if (result.isStale) {
@@ -105,8 +169,9 @@ async function showDashboard() {
     const sportId = game.sport_id ||
       `${game.sport_slug}_${game.level.toLowerCase().replace(/\s+/g, '_')}`;
 
+    const demoParam = DEMO_MODE ? '&demo' : '';
     li.innerHTML = `
-      <a class="staff-game__link" href="/staff/dismiss.html?sport_id=${encodeURIComponent(sportId)}">
+      <a class="staff-game__link" href="/staff/dismiss.html?sport_id=${encodeURIComponent(sportId)}${demoParam}">
         <div class="staff-game__name">${game.sport_name || game.summary || game.sport_slug}</div>
         <div class="staff-game__meta">
           <span>${game.level || ''}</span>

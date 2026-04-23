@@ -9,6 +9,39 @@ import { db, todayString, addDismissal, deleteDismissal, liveTodaysDismissals } 
 import { getTodaysGames } from './pass-data.js';
 
 // ---------------------------------------------------------------------------
+// Demo mode — mirrors pass-staff.js demo data. Remove before production.
+// ---------------------------------------------------------------------------
+
+const DEMO_MODE = new URLSearchParams(window.location.search).has('demo');
+
+const DEMO_ROSTERS = {
+  'baseball_varsity': [
+    { display_name: 'Orlando Castano', name_slug: 'orlando-castano', jersey: '12' },
+    { display_name: 'Marcus Rivera', name_slug: 'marcus-rivera', jersey: '7' },
+    { display_name: 'Jake Thompson', name_slug: 'jake-thompson', jersey: '23' },
+    { display_name: 'Ryan Nguyen', name_slug: 'ryan-nguyen', jersey: '4' },
+    { display_name: 'Alex Garcia', name_slug: 'alex-garcia', jersey: '15' },
+  ],
+  'soccer-girls_varsity': [
+    { display_name: 'Sofia Martinez', name_slug: 'sofia-martinez', jersey: '10' },
+    { display_name: 'Emma Wilson', name_slug: 'emma-wilson', jersey: '3' },
+    { display_name: 'Mia Chen', name_slug: 'mia-chen', jersey: '8' },
+  ],
+  'basketball-boys_jv_red': [
+    { display_name: 'Tyler Brooks', name_slug: 'tyler-brooks', jersey: '11' },
+    { display_name: 'Daniel Park', name_slug: 'daniel-park', jersey: '22' },
+    { display_name: 'Alex Garcia', name_slug: null, jersey: null },
+    { display_name: 'Alex Garcia', name_slug: null, jersey: null },
+  ],
+};
+
+const DEMO_GAMES = {
+  'baseball_varsity': { sport_name: 'Baseball', dismissal_time: '13:30' },
+  'soccer-girls_varsity': { sport_name: 'Soccer, Girls', dismissal_time: '15:00' },
+  'basketball-boys_jv_red': { sport_name: 'Basketball, Boys', dismissal_time: '14:00' },
+};
+
+// ---------------------------------------------------------------------------
 // Guard: untrusted devices go back to /staff/
 // ---------------------------------------------------------------------------
 
@@ -215,22 +248,30 @@ async function boot() {
     return;
   }
 
-  // Fetch game data + roster
-  const result = await getTodaysGames();
-  const game = result.games.find(g => {
-    const gId = g.sport_id ||
-      `${g.sport_slug}_${g.level.toLowerCase().replace(/\s+/g, '_')}`;
-    return gId === sport_id;
-  });
+  // Fetch game data + roster (or use demo data)
+  let game, rawRoster;
+
+  if (DEMO_MODE) {
+    const demoGame = DEMO_GAMES[sport_id];
+    game = demoGame ? { sport_name: demoGame.sport_name, dismissal_time: demoGame.dismissal_time } : null;
+    rawRoster = DEMO_ROSTERS[sport_id] || [];
+  } else {
+    const result = await getTodaysGames();
+    game = result.games.find(g => {
+      const gId = g.sport_id ||
+        `${g.sport_slug}_${g.level.toLowerCase().replace(/\s+/g, '_')}`;
+      return gId === sport_id;
+    });
+    rawRoster = result.getRoster(sport_id);
+  }
 
   // Header
-  els.sport.textContent = game?.sport_name || game?.summary || sport_id;
+  els.sport.textContent = game?.sport_name || sport_id;
   if (game?.dismissal_time) {
     els.time.textContent = `Dismiss at ${formatTime12(game.dismissal_time)}`;
   }
 
   // Roster with keys
-  const rawRoster = result.getRoster(sport_id);
   roster = assignKeys(rawRoster, sport_id);
 
   // Subscribe to live query — this drives all rendering
