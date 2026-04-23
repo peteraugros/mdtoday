@@ -49,6 +49,12 @@ if (!isTrusted()) {
   window.location.replace('/staff/');
 }
 
+// Preserve ?demo on back link
+if (DEMO_MODE) {
+  const backLink = document.getElementById('back-link');
+  if (backLink) backLink.href = '/staff/?demo';
+}
+
 // ---------------------------------------------------------------------------
 // DOM references
 // ---------------------------------------------------------------------------
