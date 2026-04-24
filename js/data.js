@@ -31,11 +31,8 @@ import ICAL from '../vendor/ical.esm.js';
 export const ICAL_URL = '/.netlify/functions/ical';
 
 
-export const TEMPLATES_CSV_URL =
-  'https://docs.google.com/spreadsheets/d/e/2PACX-1vRomv0QyX9GdMNWow7lDTlk6Wg4AjZbgGuGJhmrFu0mFuEFIXbyzCwTn8s5xKYqBcfxzeP21muToXIQ/pub?gid=0&single=true&output=csv';
-
-export const SUMMARY_MAP_CSV_URL =
-  'https://docs.google.com/spreadsheets/d/e/2PACX-1vRomv0QyX9GdMNWow7lDTlk6Wg4AjZbgGuGJhmrFu0mFuEFIXbyzCwTn8s5xKYqBcfxzeP21muToXIQ/pub?gid=504710999&single=true&output=csv';
+export const TEMPLATES_CSV_URL = '/.netlify/functions/sheets?tab=templates';
+export const SUMMARY_MAP_CSV_URL = '/.netlify/functions/sheets?tab=summary_map';
 
 // localStorage key for the cached parsed payload
 const CACHE_KEY = 'mdtoday_data_v1';

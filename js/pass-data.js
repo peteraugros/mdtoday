@@ -13,12 +13,9 @@ const ATHLETICS_DATA_URL = '/.netlify/functions/athletics-data';
 
 // Google Sheet override tabs — update gid values when tabs are created
 // These use the same Sheet as MD Today's schedule data, just different tabs.
-const SPORT_DEFAULTS_CSV =
-  'https://docs.google.com/spreadsheets/d/e/2PACX-1vRomv0QyX9GdMNWow7lDTlk6Wg4AjZbgGuGJhmrFu0mFuEFIXbyzCwTn8s5xKYqBcfxzeP21muToXIQ/pub?gid=1365459934&single=true&output=csv';
-const MANUAL_ROSTERS_CSV =
-  'https://docs.google.com/spreadsheets/d/e/2PACX-1vRomv0QyX9GdMNWow7lDTlk6Wg4AjZbgGuGJhmrFu0mFuEFIXbyzCwTn8s5xKYqBcfxzeP21muToXIQ/pub?gid=567893210&single=true&output=csv';
-const GAME_OVERRIDES_CSV =
-  'https://docs.google.com/spreadsheets/d/e/2PACX-1vRomv0QyX9GdMNWow7lDTlk6Wg4AjZbgGuGJhmrFu0mFuEFIXbyzCwTn8s5xKYqBcfxzeP21muToXIQ/pub?gid=1944365028&single=true&output=csv';
+const SPORT_DEFAULTS_CSV = '/.netlify/functions/sheets?tab=sport_defaults';
+const MANUAL_ROSTERS_CSV = '/.netlify/functions/sheets?tab=manual_rosters';
+const GAME_OVERRIDES_CSV = '/.netlify/functions/sheets?tab=game_overrides';
 
 const STALE_THRESHOLD_MS = 36 * 60 * 60 * 1000; // 36 hours
 
