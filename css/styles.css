@@ -337,6 +337,17 @@
     text-align: center;
   }
 
+  /* --- Streak --- */
+
+  .now-streak {
+    text-align: center;
+    font-size: 0.75rem;
+    color: var(--md-gray-text-muted);
+    padding: var(--spacing-md) 0 var(--spacing-xs);
+    letter-spacing: 0.03em;
+    opacity: 0.5;
+  }
+
   /* --- Personalize button --- */
 
   .now-personalize {

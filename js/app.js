@@ -463,6 +463,90 @@ function toggleEditPanel() {
 }
 
 // ---------------------------------------------------------------------------
+// Streak — quiet personal reflection, not gamification
+// ---------------------------------------------------------------------------
+
+const STREAK_KEY = 'mdtoday_streak_dates';
+
+function recordVisit() {
+  try {
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = String(now.getMonth() + 1).padStart(2, '0');
+    const d = String(now.getDate()).padStart(2, '0');
+    const today = `${y}-${m}-${d}`;
+
+    const raw = localStorage.getItem(STREAK_KEY);
+    const dates = raw ? JSON.parse(raw) : [];
+    if (!dates.includes(today)) {
+      dates.push(today);
+      // Keep last 90 days max
+      while (dates.length > 90) dates.shift();
+      localStorage.setItem(STREAK_KEY, JSON.stringify(dates));
+    }
+  } catch { /* private browsing or quota */ }
+}
+
+function calculateStreak() {
+  try {
+    const raw = localStorage.getItem(STREAK_KEY);
+    if (!raw) return 0;
+    const dates = JSON.parse(raw).sort();
+    if (dates.length === 0) return 0;
+
+    // Walk backwards from today, counting consecutive school days visited
+    const today = new Date();
+    let streak = 0;
+    let cursor = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+
+    // Check if today was visited — if not, start from yesterday
+    const todayStr = formatDateStr(cursor);
+    if (!dates.includes(todayStr)) {
+      cursor.setDate(cursor.getDate() - 1);
+      // Skip weekend going backward
+      while (isWeekend(cursor)) cursor.setDate(cursor.getDate() - 1);
+      if (!dates.includes(formatDateStr(cursor))) return 0;
+    }
+
+    while (dates.includes(formatDateStr(cursor))) {
+      streak++;
+      cursor.setDate(cursor.getDate() - 1);
+      // Skip weekends — they don't break the streak
+      while (isWeekend(cursor)) cursor.setDate(cursor.getDate() - 1);
+    }
+
+    return streak;
+  } catch { return 0; }
+}
+
+function isWeekend(d) {
+  const day = d.getDay();
+  return day === 0 || day === 6;
+}
+
+function formatDateStr(d) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+function renderStreak() {
+  const el = document.getElementById('streak');
+  if (!el) return;
+
+  const streak = calculateStreak();
+  if (streak < 2) {
+    el.style.display = 'none';
+    return;
+  }
+
+  el.style.display = '';
+  const label = streak === 1 ? 'day' : 'days';
+  el.textContent = `${streak}-day streak`;
+}
+
+// ---------------------------------------------------------------------------
 // Boot
 // ---------------------------------------------------------------------------
 
@@ -473,6 +557,8 @@ async function boot() {
   tickTemporal(now);
   startCountdown(tickTemporal, onLongResume);
   initEditPanel();
+  recordVisit();
+  renderStreak();
 }
 
 async function onLongResume() {
