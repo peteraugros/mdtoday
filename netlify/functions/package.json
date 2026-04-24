@@ -1,9 +1,0 @@
-{
-  "name": "mdtoday-functions",
-  "private": true,
-  "type": "module",
-  "dependencies": {
-    "@netlify/blobs": "^8.1.0",
-    "cheerio": "^1.0.0"
-  }
-}
