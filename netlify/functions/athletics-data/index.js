@@ -129,6 +129,7 @@ async function discoverSports() {
 
       if (id && nonce) {
         results.push({ slug: sport.slug, name: sport.name, id, nonce });
+        console.log(`Discovered ${sport.slug}: sportID=${id}, nonce=${nonce}`);
       } else {
         console.warn(`Sport discovery: missing id/nonce for ${sport.slug}`, {
           id, nonce
@@ -163,11 +164,16 @@ async function fetchSchedule(sport, level) {
 
   // WordPress returns '0' or '-1' on auth/nonce failure
   if (!html || html.trim() === '0' || html.trim() === '-1') {
-    console.warn(`AJAX nonce failure for ${sport.slug}/${level}: response="${html?.trim()}"`);
+    console.warn(`AJAX nonce failure for ${sport.slug}/${level}: response="${html?.trim()}", nonce=${sport.nonce}`);
     return [];
   }
 
-  return parseScheduleHTML(html, sport, level);
+  // Log HTML length for debugging empty responses
+  const parsed = parseScheduleHTML(html, sport, level);
+  if (parsed.length === 0 && html.length > 100) {
+    console.warn(`${sport.slug}/${level}: HTML returned (${html.length} chars) but 0 games parsed`);
+  }
+  return parsed;
 }
 
 function parseScheduleHTML(html, sport, level) {
