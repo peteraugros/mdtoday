@@ -556,9 +556,13 @@ function renderStreak() {
 async function boot() {
   try {
     currentPayload = await loadData();
+    // Debug: surface loadData result on mobile
+    if (currentPayload.source === 'none' || currentPayload.warnings?.length) {
+      const el = document.getElementById('day-label');
+      if (el) el.textContent = `src:${currentPayload.source} w:${(currentPayload.warnings||[]).join(' | ')}`;
+    }
   } catch (err) {
-    // Surface error on-screen for mobile debugging
-    const el = document.getElementById('now-empty-text') || document.getElementById('day-label');
+    const el = document.getElementById('day-label');
     if (el) el.textContent = `Boot error: ${err.message || err}`;
     console.error('[app] boot error:', err);
     return;
