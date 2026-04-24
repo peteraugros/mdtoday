@@ -268,6 +268,8 @@ function slugToName(slug) {
 // Assembly
 // ---------------------------------------------------------------------------
 
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
 async function scrapeAll() {
   const sports = await discoverSports();
   console.log(`Discovered ${sports.length} sports`);
@@ -296,6 +298,8 @@ async function scrapeAll() {
       } catch (err) {
         console.warn(`Roster fetch failed: ${sport.slug}/${level}`, { err });
       }
+
+      await sleep(300); // Rate limit: 300ms between level iterations
     }
   }
 

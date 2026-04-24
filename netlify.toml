@@ -3,4 +3,4 @@
 
 [functions."athletics-data"]
   schedule = "0 10 * * *"
-  timeout = 120
+  timeout = 180
