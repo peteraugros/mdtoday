@@ -120,6 +120,12 @@
 
   </div>
 
+  <script>
+    window.onerror = function(msg, src, line) {
+      var el = document.getElementById('day-label');
+      if (el) el.textContent = 'JS Error: ' + msg + ' (' + src + ':' + line + ')';
+    };
+  </script>
   <script type="module" src="./js/app.js"></script>
   <script>
     if ('serviceWorker' in navigator) {

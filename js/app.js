@@ -554,7 +554,15 @@ function renderStreak() {
 // ---------------------------------------------------------------------------
 
 async function boot() {
-  currentPayload = await loadData();
+  try {
+    currentPayload = await loadData();
+  } catch (err) {
+    // Surface error on-screen for mobile debugging
+    const el = document.getElementById('now-empty-text') || document.getElementById('day-label');
+    if (el) el.textContent = `Boot error: ${err.message || err}`;
+    console.error('[app] boot error:', err);
+    return;
+  }
   const now = new Date();
   renderStable(now);
   tickTemporal(now);
