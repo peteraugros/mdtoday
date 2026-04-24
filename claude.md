@@ -1331,6 +1331,63 @@ A parent watching their kid's game from work, on the school's own app — that's
 
 ---
 
+## Attendance — Vision (April 2026)
+
+Replaces the teacher's manual roll-call-and-data-entry loop with a kiosk students tap on the way in. Same architecture as dismissals — roster of names, tap to change state, synced across devices. This is a new use of the existing teacher role, not a new project.
+
+### The problem
+
+Current attendance flow: teacher takes roll call (scan room, count, check seating chart) → logs into Aeries → navigates to attendance → finds the right class → marks absent students → if a student arrives late, goes back in and changes absent to tardy. 3-5 minutes per class period, 5 periods a day, every day. That's 15-25 minutes of instructional time lost daily.
+
+### MVP features (non-negotiable for v1)
+
+1. **Teacher login + class selection** — teacher opens the app on a tablet/Chromebook, selects which period/class
+2. **Roster display** — grid of student names, big tap targets. Seeded from CSV or manual entry for the pilot (no API dependency)
+3. **Tap-to-check-in** — student taps their name as they enter, it turns green. One tap, done
+4. **Bell-schedule awareness** — the app knows when the period starts (MD Today already has this data). Taps before the bell = present. Taps after = tardy (auto-categorized, teacher doesn't think about it)
+5. **End-of-period summary** — clean list: present, tardy, absent. One screen
+6. **Export** — one-click copy-to-clipboard or CSV download, formatted to match Aeries import. Ships without API write access
+
+### What's out of scope for MVP
+
+- Aeries API integration (read or write) — seed rosters manually for the pilot
+- Student photos
+- Student-side self-reporting (spoofing risk without verification; teacher-as-kiosk-operator is the verification)
+- Anti-spoofing (QR codes, geofencing) — teacher is in the room, they're the verification
+- Parent notifications
+- Analytics, trends, reports
+- Late-bell edge cases (excused tardies, nurse passes, early releases)
+- Admin dashboard
+
+### Aeries integration — gating question (research needed)
+
+Aeries has a documented REST API (JSON, vendor-friendly, certificate-based auth). Districts/dioceses grant a 32-char API key. Known writable endpoints include contacts, student info, gradebook, scheduling, test scores. **Attendance writes appear to be read-only at v5** — every confirmed attendance endpoint uses GET only.
+
+**Action item:** Email Aeries integration team and ask specifically: "Does v5 support POST/PUT for period attendance (ATT table), and if not, is it on the roadmap?" The answer determines whether this becomes a full-loop product (tap → Aeries updated automatically) or a teacher-assist tool (tap → teacher pastes a short list into Aeries in 10 seconds).
+
+**Mater Dei specifics:**
+- Private school, Diocese of Orange (~40 schools)
+- Aeries instance may be school-level or diocesan-level — need to determine who administers it
+- Private/diocesan schools have more flexibility to adopt tools than public districts (fewer compliance hoops, no state procurement)
+- If the pilot works at Mater Dei, natural expansion path to every school in the diocese
+
+### Why this matters
+
+- **Dismissal:** tap = "this student left" (operational convenience)
+- **Attendance:** tap = "this student is here" (legal mandate)
+
+The stakes are higher. A dismissal bug means a kid waits an extra 5 minutes. An attendance bug means a kid is marked absent when they're present — triggering truancy letters, parental calls, grade consequences. The trust-state architecture (showing confidence level alongside data) is the right foundation, but reliability is non-negotiable.
+
+### Architecture notes
+
+- Same Dexie local state + Netlify Blobs shared store as dismissals
+- Same PIN-gated teacher role
+- Bell-schedule awareness is free — MD Today already resolves the current period and countdown
+- Could be a new view under the teacher role or an extension of the existing dismiss flow
+- Roster source for MVP: manual CSV import or Sheet tab. API integration is v2
+
+---
+
 ## Streak Indicator — added 2026-04-23
 
 Quiet personal reflection mechanic on the Now view. Not gamification — a subtle mirror of the student's own behavior.
