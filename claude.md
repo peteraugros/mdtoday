@@ -1231,6 +1231,74 @@ Only port these after v1 has proven adoption and stability:
 
 ---
 
+## Live Sports — Vision (April 2026)
+
+This is the feature that transitions MD Today from a schedule utility to a school platform. The schedule gets students to install it. Live scores get them to keep opening it. Strong conviction that students, teachers, admin, and alums would all use this — described as "glaringly absent" in the Mater Dei sporting community.
+
+### Architecture (proof of concept)
+
+- **Scorer UI:** One person (student manager) taps score updates from the sideline. Simple: [−] score [+] per team, period/quarter/inning selector, unofficial clock.
+- **Broadcast:** Same infra as dismissals — POST to Netlify Blobs, pull/refresh on the client. Not real-time, but "live enough" (10-30 second delay). WebSockets deferred until demand requires it (probably when logins exist).
+- **Entry point:** The Sports tab already exists. A game day with a live score becomes the most compelling thing in the app.
+
+### Feature layers (build in order)
+
+**Layer 1 — Live scoring (proof of concept)**
+- Tap-to-score UI for the student manager
+- Score + period/quarter broadcast to all viewers
+- Unofficial clock display
+- Pull-to-refresh on the viewer side
+
+**Layer 2 — Sport day view enhancements**
+- Address field linking to Maps for away games
+- RSVP for students — view a list of who's going
+- Tap a sport to open its season schedule with results
+
+**Layer 3 — Season schedule + results**
+- Unofficial results first (from scorer)
+- Official results verified later via CIF data
+
+**Layer 4 — Roster + player profiles**
+- Tap a name → player pic, bio, stats, press, height, weight
+- Scraper already pulls rosters; profile data needs another source
+
+**Layer 5 — Live feed chat**
+- Everyone watching the stream can read and participate
+- Heavy AI filter for language (non-negotiable in a school context)
+- Requires auth (login system) — deferred until backend exists
+
+### Rollout sequence
+
+1. **Football (fall)** — biggest crowd, simplest score model (two numbers + quarter)
+2. **Basketball (winter)** — high engagement, indoor
+3. **Baseball (spring)** — more granular scoring
+4. Fill in remaining sports once the big three are established
+
+### Infrastructure progression
+
+- **Phase 1 (now):** Netlify Blobs + pull refresh. Same stack as dismissals. No new dependencies.
+- **Phase 2 (when usage demands it):** WebSockets + backend + login system. This is when chat, per-user identity, and real-time push become necessary.
+- **Phase 3:** CIF data integration for official results, player profile data sources.
+
+### Why this matters for monetization
+
+A parent watching their kid's game from work, on the school's own app — that's institutional pride, not just a tool. This is the feature that makes a principal say "we need to budget for this." Live sports transforms MD Today from "a nice thing a student built" to "part of how we run athletics."
+
+---
+
+## Streak Indicator — added 2026-04-23
+
+Quiet personal reflection mechanic on the Now view. Not gamification — a subtle mirror of the student's own behavior.
+
+- Tracks which dates the student opened the app in localStorage (max 90 days)
+- Counts consecutive school days backward from today — weekends are skipped, not counted as breaks
+- Shows nothing on day 1 — no "1-day streak" begging for attention
+- Shows "X-day streak" starting at 2+ days, in 12px muted text at 50% opacity, centered below the schedule blocks
+- Disappears silently if they miss a school day — the quiet absence is the nudge, not a message
+- The dopamine hit is seeing the number go up; the motivation is not wanting to see it gone
+
+---
+
 ## Vision Alignment — MD Today (April 2026)
 
 The principal responded with strong enthusiasm to MD Today, validating early product-market fit and signaling real institutional interest. Initial student onboarding has begun, and traction is emerging organically.
