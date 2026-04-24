@@ -149,9 +149,10 @@ export async function syncDeleteDismissal(remoteId) {
 }
 
 /**
- * Pull all shared dismissals for a sport and merge into local Dexie.
- * Records from the server that aren't in local Dexie get added.
- * Returns the merged list.
+ * Pull all shared dismissals for a sport and reconcile with local Dexie.
+ * - Records on server but not local → added to Dexie
+ * - Records in local but not on server → deleted from Dexie
+ * This ensures all devices converge to the same truth.
  */
 export async function syncPullDismissals(sport_id) {
   try {
@@ -162,20 +163,33 @@ export async function syncPullDismissals(sport_id) {
     const today = todayString();
     const local = await db.dismissals.where({ sport_id, date: today }).toArray();
 
-    // Index local records by student_id or normalized identity.value
+    // Build remote key set for lookups
+    const remoteKeys = new Set();
+    for (const r of remote) {
+      const key = r.student_id || (r.identity?.value || '').trim().toLowerCase();
+      remoteKeys.add(key);
+    }
+
+    // Build local key set for lookups
     const localKeys = new Set();
     for (const d of local) {
-      if (d.student_id) localKeys.add(d.student_id);
-      else localKeys.add((d.identity?.value || '').trim().toLowerCase());
+      const key = d.student_id || (d.identity?.value || '').trim().toLowerCase();
+      localKeys.add(key);
     }
 
     // Add remote records not in local
     for (const r of remote) {
       const key = r.student_id || (r.identity?.value || '').trim().toLowerCase();
       if (!localKeys.has(key)) {
-        // Store the remote _id so we can delete it later
         await db.dismissals.add({ ...r, _remoteId: r._id, id: undefined });
-        localKeys.add(key);
+      }
+    }
+
+    // Delete local records not on server (another device un-dismissed them)
+    for (const d of local) {
+      const key = d.student_id || (d.identity?.value || '').trim().toLowerCase();
+      if (!remoteKeys.has(key)) {
+        await db.dismissals.delete(d.id);
       }
     }
 
