@@ -262,9 +262,7 @@ async function boot() {
   roster = assignKeys(rawRoster, sport_id);
 
   // Pull shared dismissals from server into local Dexie before subscribing
-  if (!DEMO_MODE) {
-    await syncPullDismissals(sport_id);
-  }
+  await syncPullDismissals(sport_id);
 
   // Subscribe to live query — this drives all rendering
   const observable = liveTodaysDismissals(sport_id);
