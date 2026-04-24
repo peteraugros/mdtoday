@@ -1028,6 +1028,29 @@ netlify/functions/
 netlify.toml                ← Cron schedule config
 ```
 
+### File structure (additions only) — updated 2026-04-23
+
+```
+staff/
+├── index.html              ← PIN entry + staff dashboard
+└── dismiss.html            ← Sport detail: roster + dismissal actions
+js/
+├── pass-db.js              ← Dexie setup, schema, typed CRUD + shared sync
+├── pass-data.js            ← Fetch athletics-data JSON + Sheet overrides, merge
+├── pass-trust.js           ← Device trust check (localStorage flag)
+├── pass-staff.js           ← /staff/index.html entry point
+└── pass-dismiss.js         ← /staff/dismiss.html entry point
+netlify/functions/
+├── athletics-data.js       ← Scheduled daily scraper (3am Pacific cron)
+├── dismissals/             ← Shared dismissal state (directory-based function)
+│   ├── index.js            ← GET/POST/DELETE against Netlify Blobs
+│   ├── package.json        ← @netlify/blobs dependency (vendored)
+│   └── node_modules/       ← Vendored — committed because root .gitignore excludes node_modules
+├── ical.js                 ← iCal proxy
+└── package.json            ← cheerio dependency (athletics scraper)
+netlify.toml                ← Cron schedule config
+```
+
 ### Key architectural decisions
 
 - **UI state reflects Dexie. Always.** ACTIVE and DISMISSED lists derive from `Dexie.liveQuery()`, never local state. No optimistic updates.
@@ -1035,26 +1058,45 @@ netlify.toml                ← Cron schedule config
 - **Three-layer data merge:** game_overrides → scraper → sport_defaults → hide (no dismissal time = don't show).
 - **Scraper boundary:** writes to Netlify Blobs only, never to the Google Sheet. Sheet is human-override territory.
 - **5-tap hidden gesture** on the "MD Today" header brand navigates to `/staff/`. This is how teachers reach the PIN gate from inside the installed PWA (no address bar). `touch-action: manipulation` prevents zoom.
-- **Floating key icon (FAB)** appears bottom-right on all student views only after device trust is established.
+- **Floating key icon (FAB)** appears bottom-right on all student views only after device trust is established. Pulses for 5 minutes after page load (subtle box-shadow ripple), then stops. Respects `prefers-reduced-motion`.
 - **PIN gate uses blocking `<script>` in `<head>`** to prevent flash of PIN section on trusted devices (bfcache, back-navigation).
 - **Demo mode (`?demo`)** injects fake games for testing. Remove before production launch.
+- **Trusted devices no longer auto-redirect to `/staff/`.** Teachers land on the Now view like students. The FAB pulse draws attention to the staff entry point. The `mdt:forceStudent` sessionStorage override in `pass-staff.js` is now a no-op but harmless.
+
+### Shared dismissal state — added 2026-04-23
+
+Dismissals sync across devices via Netlify Blobs. Local Dexie provides instant UI; Netlify Blobs is the shared source of truth.
+
+**Data flow:**
+- **Dismiss:** local Dexie write (instant UI) → async POST to `/.netlify/functions/dismissals` → stored in Netlify Blob keyed `dismissals-YYYY-MM-DD`
+- **Page load:** GET from server → `syncPullDismissals` reconciles local Dexie with server (adds missing, deletes stale)
+- **Un-dismiss:** local Dexie delete → async DELETE to server by `_remoteId`
+
+**Key properties:**
+- **Slow sync, not real-time.** Device B sees Device A's dismissals on page load/refresh, not instantly. Acceptable for school dismissal workflows — teachers aren't racing.
+- **Any trusted device can un-dismiss any student.** Symmetric access, no per-teacher identity (Phase 2 candidate).
+- **Bidirectional reconciliation.** `syncPullDismissals` adds server records missing locally AND deletes local records missing from server. Without this, un-dismiss on Device B was invisible to Device A.
+- **One blob per day.** Key format `dismissals-YYYY-MM-DD` (US/Pacific timezone). Old blobs accumulate indefinitely — cleanup function for 30/90 day retention is a future task, low priority.
+- **Server assigns `_id`.** Each record gets a unique `_id` on POST (`timestamp_random`). Stored in local Dexie as `_remoteId` so un-dismiss can reference it for server deletion.
+- **Fire-and-forget push.** `syncPushDismissal` is called without `await` in the dismiss flow. If network fails, dismissal is saved locally with a console warning. Server catches up on next successful push.
+- **Vendored dependency.** `@netlify/blobs` is committed inside `netlify/functions/dismissals/node_modules/` because root `.gitignore` excludes `node_modules/` and Netlify only auto-injects `@netlify/blobs` for scheduled functions, not regular ones. The directory-based function with its own `package.json` + vendored `node_modules` is the pattern that works.
 
 ### Student-facing files modified by Pass App
 
-- `js/app.js` — 10-line redirect block at top (trusted devices on `/` → `/staff/`)
-- `index.html`, `upcoming.html`, `sports.html`, `daysoff.html` — inline script for FAB + 5-tap gesture
-- `css/styles.css` — staff styles appended under `/* Pass App (Staff) */` header
+- `index.html`, `upcoming.html`, `sports.html`, `daysoff.html` — inline script for FAB (with 5-min pulse) + 5-tap gesture
+- `css/styles.css` — staff styles appended under `/* Pass App (Staff) */` header; FAB pulse animation (`fab-pulse` keyframe)
 
-All other student-facing JS modules are untouched.
+All student-facing JS modules are untouched. The auto-redirect from `js/app.js` was removed 2026-04-23.
 
-### Google Sheet tabs needed (not yet created)
+### Google Sheet tabs — created 2026-04-23
 
-Three new tabs in the existing MD Today sheet:
-- `sport_defaults` — coach policy dismissal times per sport/level
-- `manual_rosters` — rosters for sports without roster pages on athletics site
-- `game_overrides` — per-game dismissal time overrides
+Four tabs in the existing MD Today sheet, published as CSV:
+- `sport_defaults` (gid `1365459934`) — coach policy dismissal times per sport/level
+- `manual_rosters` (gid `567893210`) — rosters for sports without roster pages on athletics site
+- `game_overrides` (gid `1944365028`) — per-game dismissal time overrides
+- `dismissals` (gid `825803187`) — created for potential future Sheet-based logging; currently unused (Netlify Blobs is the active shared store)
 
-Placeholder gid values in `js/pass-data.js` (lines ~18-23) need updating with real gids after tabs are created.
+Config tab gids are wired into `js/pass-data.js` (lines ~16-21).
 
 ---
 
