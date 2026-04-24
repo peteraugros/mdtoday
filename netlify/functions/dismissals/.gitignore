@@ -1,0 +1,2 @@
+# Override root .gitignore — this function needs its node_modules deployed
+!node_modules/
