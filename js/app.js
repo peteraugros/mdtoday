@@ -554,21 +554,7 @@ function renderStreak() {
 // ---------------------------------------------------------------------------
 
 async function boot() {
-  try {
-    currentPayload = await loadData();
-    // Debug: surface loadData result on mobile (temporary)
-    if (currentPayload.source === 'none' || currentPayload.warnings?.length) {
-      const dbg = document.createElement('div');
-      dbg.style.cssText = 'position:fixed;top:0;left:0;right:0;background:red;color:white;padding:12px;z-index:9999;font-size:12px;word-break:break-all';
-      dbg.textContent = `src:${currentPayload.source} | ${(currentPayload.warnings||[]).join(' | ')}`;
-      document.body.prepend(dbg);
-    }
-  } catch (err) {
-    const el = document.getElementById('day-label');
-    if (el) el.textContent = `Boot error: ${err.message || err}`;
-    console.error('[app] boot error:', err);
-    return;
-  }
+  currentPayload = await loadData();
   const now = new Date();
   renderStable(now);
   tickTemporal(now);
