@@ -1096,7 +1096,49 @@ Four tabs in the existing MD Today sheet, published as CSV:
 - `game_overrides` (gid `1944365028`) — per-game dismissal time overrides
 - `dismissals` (gid `825803187`) — created for potential future Sheet-based logging; currently unused (Netlify Blobs is the active shared store)
 
-Config tab gids are wired into `js/pass-data.js` (lines ~16-21).
+Config tab gids are wired into `js/pass-data.js` (lines ~16-21). All Sheet CSV fetches now go through `/.netlify/functions/sheets?tab=X` (see "Zero external dependencies" below).
+
+### Session 2026-04-24: Scraper, zero-dependency architecture, resolver fixes
+
+**Athletics scraper — now working in production:**
+- **iCal-filtered scraping.** Scraper fetches the iCal feed first to determine which sports have games today, then only scrapes those (typically 2-5 sports, ~20 requests instead of 120+). Falls back to scraping all if iCal is unavailable.
+- **Rate limiting solved.** The athletics site returns a 2195-char block page after ~60 requests. The iCal filter + 2s delay between sports + scrape lock (prevents concurrent invocations) keeps us under the limit.
+- **Scrape lock.** Uses a Netlify Blob (`scrape-lock`) with a 3-minute TTL. Second invocation serves cached data instead of starting another scrape. Without this, the CDN retry triggered a second scraper that doubled the request load.
+- **Manual trigger.** `?scrape=md1950` on the athletics-data function forces a fresh scrape without waiting for the cron. Uses the staff PIN as a simple gate.
+- **Cron moved to 12:01 AM Pacific** (`1 7 * * *` UTC) — calendar is already set by then, no need to wait until 3am.
+- **Real game data confirmed.** April 24: Baseball Varsity vs JSerra (dismiss 11:45 AM), Softball Varsity vs JSerra (dismiss 1:20 PM). Rendered on staff dashboard without demo mode.
+- **Directory-based functions.** Both `athletics-data/` and `dismissals/` are directory-based with vendored `node_modules/` (committed via `.gitignore` override). This is the pattern that works on Netlify — the root `.gitignore` excludes `node_modules/` globally, and Netlify doesn't run `npm install` for subdirectory functions.
+
+**Zero external dependencies — all fetches proxied through same origin:**
+- **Vendored JS libraries.** PapaParse, ical.js, and Dexie moved from CDN imports (`cdn.jsdelivr.net`) to `./vendor/` directory. `cdn.jsdelivr.net` was unreachable on some cellular networks, causing the entire app to fail to load. ~310KB total, precached by service worker.
+- **Google Sheet CSV proxy.** New `netlify/functions/sheets.js` proxies all 5 Sheet tabs via `/.netlify/functions/sheets?tab=X`. `docs.google.com` was also unreachable on some cellular networks. The Sheet must be both "Published to web" AND shared as "Anyone with the link can view" — these are separate Google permissions. Missing the share permission causes a 302 redirect to Google login.
+- **Complete list of same-origin proxied endpoints:**
+  - `/.netlify/functions/ical` → Mater Dei iCal feed
+  - `/.netlify/functions/sheets?tab=templates` → bell schedule templates CSV
+  - `/.netlify/functions/sheets?tab=summary_map` → calendar SUMMARY → template mapping CSV
+  - `/.netlify/functions/sheets?tab=sport_defaults` → coach default dismissal times CSV
+  - `/.netlify/functions/sheets?tab=manual_rosters` → manual roster entries CSV
+  - `/.netlify/functions/sheets?tab=game_overrides` → per-game overrides CSV
+  - `/.netlify/functions/athletics-data` → scraped game schedules + rosters JSON
+  - `/.netlify/functions/dismissals` → shared dismissal state (Netlify Blobs)
+- **If Netlify is up, the app works. No CDN, no Google, no third parties in the critical path.**
+
+**Sports view fix:**
+- `SPORTS_PATTERNS` in `sports-view.js` required a gender word (Boys/Girls) after the level prefix, missing sports like Baseball, Softball, Track that use `"V Baseball @ ..."` without a gender word. Fixed to match any `^V\s`, `^JV\s`, `^FR\s` prefix.
+
+**Friday office hours fix:**
+- Resolver now filters out blocks matching `/office\s*hour/i` on Fridays (`date.getDay() === 5`). Same pattern as the Monday homeroom substitution — a localized resolver convention, not a template change.
+
+**Countdown format:**
+- Shows `1h 44m 56s` instead of `104m 56s` when countdown exceeds 60 minutes.
+
+**Cache version:** `v2.2.0` (bumped from `v2.0.0` during this session).
+
+**`reset.html`** — nuclear reset page at `/reset.html`. Unregisters all service workers, clears all caches, clears localStorage. Created during mobile debugging. Can be used by any student with a stuck PWA. Consider removing or PIN-gating before wider launch.
+
+**Known issues from this session:**
+- **Baseball and softball have no online rosters.** The athletics site roster pages are empty for these sports — the coaches haven't entered data into HomeCampus. The `manual_rosters` Sheet tab exists and the code reads from it, but it needs to be populated with player names from the coaches.
+- **10 sports total have no roster pages** on the athletics site: Baseball, Softball, Track & Field, Volleyball (Boys), Swimming, Tennis, Golf, Lacrosse, Water Polo, Wrestling. All require manual entry in the Sheet's `manual_rosters` tab for roster-based dismissal.
 
 ---
 
@@ -1119,6 +1161,9 @@ Config tab gids are wired into `js/pass-data.js` (lines ~16-21).
 15. **"Phase N says create file X" in the spec ≠ "file X does not exist on disk."**
 16. **CSS `display` values override the `hidden` attribute.** If a CSS rule sets `display: flex` (or any explicit display), the HTML `hidden` attribute is silently ignored. Use `style.display = 'none'` / `style.display = ''` instead of `.hidden` when CSS declares a display value. This burned us on the staff stale banner.
 17. **iOS PWA localStorage is separate from Safari.** Adding to Home Screen creates a new browsing context with its own localStorage. Trust flags, personal schedules, and any other localStorage state set in Safari do NOT carry over. The 5-tap gesture exists specifically so teachers can reach `/staff/` and enter the PIN from inside the PWA context.
+19. **Never add external CDN imports.** All JS libraries are vendored in `./vendor/` and all data fetches go through same-origin Netlify Functions. CDN and Google were unreachable on cellular networks, breaking the app entirely. If a new library is needed, download the ESM build into `vendor/`, add to SW precache, and import with a relative path.
+20. **Friday never has office hours.** The resolver filters these out automatically. If this changes, remove the Friday filter in `resolve.js`.
+21. **Google Sheet must be both "Published to web" AND shared as "Anyone with the link."** These are separate permissions. Missing either one breaks the CSV fetch — Published-but-Restricted returns a 302 to Google login.
 18. **The `hidden` attribute pattern is unreliable when CSS sets `display`.** Prefer `style.display` toggling for any element that has an explicit `display` value in CSS. The `hidden` attribute works fine for elements with no CSS display override. Empty stub files are common in early-phase scaffolding (this has happened at least twice — `countdown.js` before Phase 2's correction, `sw.js` + `manifest.json` before Phase 4). Before any phase that introduces new files, run `ls -la` or `git ls-files` + `wc -l` on each named target. "Create X" in the spec means "fill X," not "assume X doesn't exist." The consequence of assuming wrong is overwriting real work with no recovery path.
 
 ---
