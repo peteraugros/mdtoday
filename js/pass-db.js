@@ -1,7 +1,7 @@
 // js/pass-db.js — Dexie setup, schema, typed read/write helpers
 // See BUILD.md Step 1 for full contract.
 
-import Dexie from 'https://cdn.jsdelivr.net/npm/dexie@3.2.7/dist/dexie.mjs';
+import Dexie from '../vendor/dexie.mjs';
 
 export const db = new Dexie('mdtoday_pass');
 

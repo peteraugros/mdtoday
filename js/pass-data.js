@@ -1,7 +1,7 @@
 // js/pass-data.js — Fetch athletics-data JSON + Sheet overrides, merge, in-memory cache
 // See BUILD.md Step 2 for full contract.
 
-import Papa from 'https://cdn.jsdelivr.net/npm/papaparse@5.4.1/+esm';
+import Papa from '../vendor/papaparse.esm.js';
 import { loadData } from './data.js';
 import { todayString } from './pass-db.js';
 

@@ -9,7 +9,7 @@
 //   CACHE_NAME encodes the app version. Bump in lockstep with footer version
 //   strings in all HTML files.
 
-const CACHE_NAME = 'mdtoday-v2.1.0';
+const CACHE_NAME = 'mdtoday-v2.2.0';
 
 const PRECACHE_URLS = [
   './',
@@ -26,6 +26,9 @@ const PRECACHE_URLS = [
   './js/data.js',
   './js/resolve.js',
   './js/schedule.js',
+  './vendor/papaparse.esm.js',
+  './vendor/ical.esm.js',
+  './vendor/dexie.mjs',
   './manifest.json',
   './icons/apple-touch-icon.png',
   './icons/md-wordmark.png',

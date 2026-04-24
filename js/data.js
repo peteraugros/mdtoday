@@ -16,8 +16,8 @@
 // PapaParse for CSV parsing (45KB, handles escaped quotes + commas correctly)
 // ical.js for iCal parsing (handles timezones, escapes, folded lines, RRULEs)
 
-import Papa from 'https://cdn.jsdelivr.net/npm/papaparse@5.4.1/+esm';
-import ICAL from 'https://cdn.jsdelivr.net/npm/ical.js@1.5.0/+esm';
+import Papa from '../vendor/papaparse.esm.js';
+import ICAL from '../vendor/ical.esm.js';
 
 // ---------------------------------------------------------------------------
 // Constants
