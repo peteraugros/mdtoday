@@ -1299,6 +1299,36 @@ Quiet personal reflection mechanic on the Now view. Not gamification — a subtl
 
 ---
 
+## Roles & Access Model
+
+MD Today uses PIN-gated roles. Each PIN unlocks a different view layer on top of the base student experience. Student is the default — every role also sees what students see. PINs are device-trusted via localStorage (enter once, remembered until cleared).
+
+| Role | PIN | What they see beyond student view | Status |
+|---|---|---|---|
+| **Student** | none (default) | Schedule, streak, sports, RSVP | Live |
+| **Teacher** | `md1950` | + Dismissal dashboard | Live |
+| **Coach** | `co1950` | + Their sport roster, lineup, dismissals | Not built |
+| **Parent** | `pa1950` | + Their student's info, game alerts | Not built |
+| **Scorekeeper** | `sk1950` | + Score entry UI during games | Not built |
+| **Admin** | `ad1950` | + Analytics, overrides, all-sport view | Not built |
+| **Commerce** | `cm1950` | + Merch catalog, ticket sales, transactions | Not built |
+| **ASB/Spirit** | `as1950` | + Spirit day posts, rally info | Not built |
+
+### Design principles
+
+- **Every role is student-plus.** No role loses the student view. A coach is a student who can also manage their sport. A parent is a student who can also see their kid's info.
+- **PINs are simple role gates, not authentication.** They establish "what kind of user is this device" — not "who is this person." Real identity (per-user login) is a Phase 2 concern, deferred until the backend exists.
+- **One device can hold multiple roles.** Entering a new PIN adds that role's access without removing previous ones. A teacher who is also a coach sees both views.
+- **The 5-tap gesture + FAB pattern extends to all roles.** Currently used for teacher access. Future roles will use the same entry point — the PIN gate determines which dashboard appears.
+
+### Implementation notes
+
+- Currently only `md1950` (teacher) is implemented in `js/pass-trust.js`
+- Multi-role support will require `pass-trust.js` to store a set of roles rather than a single boolean flag
+- Each role's view can be a separate HTML page under `/staff/` or a filtered version of the same dashboard — TBD based on complexity per role
+
+---
+
 ## Vision Alignment — MD Today (April 2026)
 
 The principal responded with strong enthusiasm to MD Today, validating early product-market fit and signaling real institutional interest. Initial student onboarding has begun, and traction is emerging organically.
