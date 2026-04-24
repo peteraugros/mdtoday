@@ -129,11 +129,18 @@
     });
   </script>
   <script type="module">
-    document.getElementById('day-label').textContent = 'Module OK, importing...';
+    var el = document.getElementById('day-label');
+    el.textContent = 'Testing imports...';
     try {
+      el.textContent = '1/3 PapaParse...';
+      await import('./vendor/papaparse.esm.js');
+      el.textContent = '2/3 ical.js...';
+      await import('./vendor/ical.esm.js');
+      el.textContent = '3/3 app.js...';
       await import('./js/app.js');
+      el.textContent = 'All loaded OK';
     } catch (err) {
-      document.getElementById('day-label').textContent = 'IMPORT FAIL: ' + (err.message || err);
+      el.textContent = 'FAIL: ' + (err.message || err);
     }
   </script>
   <script>
