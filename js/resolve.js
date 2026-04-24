@@ -284,8 +284,14 @@ export function resolveDay(data, date = new Date()) {
     };
   }
 
+  // --- Friday: remove Office Hour blocks (never on Fridays) ---
+  const isFriday = date.getDay() === 5;
+
   // --- Build the resolved template ---
-  const blocks = getBlocksForTemplate(data.templates || [], finalTemplateId);
+  let blocks = getBlocksForTemplate(data.templates || [], finalTemplateId);
+  if (isFriday) {
+    blocks = blocks.filter(b => !/office\s*hour/i.test(b.block_name));
+  }
 
   if (blocks.length === 0) {
     // summary_map pointed at a template_id that doesn't exist in templates.
