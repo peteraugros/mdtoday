@@ -5,7 +5,7 @@
 // derives from a live Dexie query. Never from component-local state.
 
 import { isTrusted } from './pass-trust.js';
-import { db, todayString, addDismissal, deleteDismissal, liveTodaysDismissals } from './pass-db.js';
+import { db, todayString, addDismissal, deleteDismissal, liveTodaysDismissals, syncPushDismissal, syncDeleteDismissal, syncPullDismissals } from './pass-db.js';
 import { getTodaysGames } from './pass-data.js';
 
 // ---------------------------------------------------------------------------
@@ -157,7 +157,11 @@ function render(dismissals) {
       </span>
     `;
     // Un-dismiss: tap dismissed name → hard delete → returns to active via live query
-    li.addEventListener('click', () => deleteDismissal(d.id));
+    li.addEventListener('click', async () => {
+      await deleteDismissal(d.id);
+      // Also remove from shared store
+      syncDeleteDismissal(d._remoteId || d._id);
+    });
     els.dismissedList.appendChild(li);
   }
 
@@ -187,6 +191,8 @@ async function dismissRoster(row) {
   };
 
   await addDismissal(record);
+  // Replicate to shared store (fire-and-forget)
+  syncPushDismissal(record);
 }
 
 async function dismissFreeText() {
@@ -205,6 +211,8 @@ async function dismissFreeText() {
   };
 
   await addDismissal(record);
+  // Replicate to shared store (fire-and-forget)
+  syncPushDismissal(record);
   els.offrosterInput.value = '';
 }
 
@@ -252,6 +260,11 @@ async function boot() {
 
   // Roster with keys
   roster = assignKeys(rawRoster, sport_id);
+
+  // Pull shared dismissals from server into local Dexie before subscribing
+  if (!DEMO_MODE) {
+    await syncPullDismissals(sport_id);
+  }
 
   // Subscribe to live query — this drives all rendering
   const observable = liveTodaysDismissals(sport_id);
