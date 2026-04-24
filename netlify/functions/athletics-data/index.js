@@ -37,13 +37,27 @@ export default async (req, context) => {
   const isManualTrigger = url.searchParams.get('scrape') === 'md1950';
 
   if (isCron || isManualTrigger) {
+    // Prevent concurrent scrapes — check if one is already running
+    try {
+      const lock = await store.get('scrape-lock', { type: 'json' });
+      if (lock && Date.now() - lock.started < 180000) {
+        console.log('Scrape already in progress, serving cached data');
+        return serveCached(store);
+      }
+    } catch { /* no lock exists, proceed */ }
+
+    // Set lock
+    await store.setJSON('scrape-lock', { started: Date.now() });
+
     try {
       const data = await scrapeAll();
       const payload = { ...data, generated_at: new Date().toISOString() };
       await store.setJSON('latest', payload);
+      await store.delete('scrape-lock');
       return respond({ ...payload, source: 'scrape' }, 200, true);
     } catch (err) {
       console.error('Scrape failed, falling back to cache:', { err });
+      await store.delete('scrape-lock');
       return serveCached(store, err);
     }
   }
