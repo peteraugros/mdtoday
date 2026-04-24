@@ -64,10 +64,10 @@ function relativeTimeAgo(iso) {
 
 // Patterns that identify a sports event in the iCal feed
 const SPORTS_PATTERNS = [
-  /^V\s+(Boys|Girls)\s+/i,     // Varsity: "V Boys Basketball @ ..."
-  /^JV\s+(Boys|Girls)\s+/i,    // JV: "JV Girls Soccer vs ..."
-  /^JV\s+/i,                   // JV without gender
-  /^Frosh\s+/i,                // Freshman
+  /^V\s/i,                     // Varsity: "V Baseball @ ...", "V Boys Basketball @ ..."
+  /^JV\s/i,                    // JV: "JV Red Baseball @ ...", "JV Girls Soccer vs ..."
+  /^FR\s/i,                    // Freshman: "FR Baseball @ ..."
+  /^Frosh\s/i,                 // Freshman alternate
   /^(Boys|Girls)\s+.*(@|vs)/i, // Gender-prefixed with game indicator
 ];
 
