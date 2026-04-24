@@ -1,16 +1,12 @@
 // netlify/functions/dismissals.js
-// Shared dismissal state backed by Netlify Blobs.
+// Shared dismissal state backed by Netlify Blobs (REST API, no npm package).
 // GET  → returns today's dismissals as JSON array
 // POST → adds a dismissal record, returns updated array
-// DELETE → removes a dismissal by student_id, returns updated array
+// DELETE → removes a dismissal by _id, returns updated array
 //
-// Blob key: "dismissals-YYYY-MM-DD" (one blob per day, keeps things simple).
-// Each blob is a JSON array of dismissal records.
-
-import { getStore } from '@netlify/blobs';
+// Blob key: "dismissals-YYYY-MM-DD" (one blob per day).
 
 function todayKey() {
-  // US/Pacific date — matches the school's timezone
   const now = new Date();
   const pacific = new Date(now.toLocaleString('en-US', { timeZone: 'America/Los_Angeles' }));
   const y = pacific.getFullYear();
@@ -19,18 +15,50 @@ function todayKey() {
   return `dismissals-${y}-${m}-${d}`;
 }
 
-async function readDismissals(store, key) {
+// ---------------------------------------------------------------------------
+// Netlify Blobs REST helpers (no @netlify/blobs package needed)
+// Uses NETLIFY_BLOBS_CONTEXT env var injected by Netlify at runtime.
+// ---------------------------------------------------------------------------
+
+function getBlobContext() {
+  const raw = process.env.NETLIFY_BLOBS_CONTEXT;
+  if (!raw) return null;
   try {
-    const data = await store.get(key, { type: 'json' });
-    if (!data) return [];
-    return data;
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+function blobUrl(ctx, store, key) {
+  return `${ctx.apiURL}/${ctx.siteID}/${store}/${key}`;
+}
+
+function blobHeaders(ctx) {
+  return {
+    Authorization: `Bearer ${ctx.token}`,
+    'Content-Type': 'application/json',
+  };
+}
+
+async function readDismissals(ctx, key) {
+  try {
+    const res = await fetch(blobUrl(ctx, 'dismissals', key), {
+      headers: blobHeaders(ctx),
+    });
+    if (res.status === 404 || !res.ok) return [];
+    return await res.json();
   } catch {
     return [];
   }
 }
 
-async function writeDismissals(store, key, records) {
-  await store.setJSON(key, records);
+async function writeDismissals(ctx, key, records) {
+  await fetch(blobUrl(ctx, 'dismissals', key), {
+    method: 'PUT',
+    headers: blobHeaders(ctx),
+    body: JSON.stringify(records),
+  });
 }
 
 function jsonResponse(data, status = 200) {
@@ -44,14 +72,18 @@ function jsonResponse(data, status = 200) {
 }
 
 export default async (req, context) => {
-  const store = getStore('dismissals');
+  const ctx = getBlobContext();
+  if (!ctx) {
+    return jsonResponse({ error: 'Blob store not available' }, 500);
+  }
+
   const key = todayKey();
 
   // GET — return today's dismissals, optionally filtered by sport_id
   if (req.method === 'GET') {
     const url = new URL(req.url);
     const sportFilter = url.searchParams.get('sport_id');
-    let records = await readDismissals(store, key);
+    let records = await readDismissals(ctx, key);
     if (sportFilter) {
       records = records.filter(r => r.sport_id === sportFilter);
     }
@@ -67,14 +99,13 @@ export default async (req, context) => {
       return jsonResponse({ error: 'Invalid JSON' }, 400);
     }
 
-    // Validate required fields
     if (!body.sport_id || !body.identity?.value || !body.date) {
-      return jsonResponse({ error: 'Missing required fields: sport_id, identity.value, date' }, 400);
+      return jsonResponse({ error: 'Missing required fields' }, 400);
     }
 
-    const records = await readDismissals(store, key);
+    const records = await readDismissals(ctx, key);
 
-    // Duplicate guard — same sport_id + student_id (roster) or identity.value (free_text)
+    // Duplicate guard
     const isDuplicate = records.some(r => {
       if (r.sport_id !== body.sport_id) return false;
       if (r.student_id && body.student_id) return r.student_id === body.student_id;
@@ -89,11 +120,9 @@ export default async (req, context) => {
       return jsonResponse({ ok: true, duplicate: true, records });
     }
 
-    // Assign a unique ID for deletion
     body._id = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-
     records.push(body);
-    await writeDismissals(store, key, records);
+    await writeDismissals(ctx, key, records);
 
     return jsonResponse({ ok: true, duplicate: false, records });
   }
@@ -111,9 +140,9 @@ export default async (req, context) => {
       return jsonResponse({ error: 'Missing _id' }, 400);
     }
 
-    let records = await readDismissals(store, key);
+    let records = await readDismissals(ctx, key);
     records = records.filter(r => r._id !== body._id);
-    await writeDismissals(store, key, records);
+    await writeDismissals(ctx, key, records);
 
     return jsonResponse({ ok: true, records });
   }

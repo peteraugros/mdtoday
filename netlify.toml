@@ -1,6 +1,2 @@
-[functions]
-  directory = "netlify/functions"
-  node_bundler = "esbuild"
-
 [functions."athletics-data"]
   schedule = "0 10 * * *"
