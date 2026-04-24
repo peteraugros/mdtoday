@@ -22,7 +22,10 @@ export default async (request) => {
   }
 
   try {
-    const upstream = await fetch(SHEETS[tab]);
+    const upstream = await fetch(SHEETS[tab], {
+      headers: { 'User-Agent': 'Mozilla/5.0 MDToday/1.0' },
+      redirect: 'follow',
+    });
     if (!upstream.ok) {
       return new Response(`Upstream error: ${upstream.status}`, { status: 502 });
     }
