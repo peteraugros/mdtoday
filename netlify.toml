@@ -1,2 +1,6 @@
+[functions]
+  external_node_modules = ["@netlify/blobs", "cheerio"]
+
 [functions."athletics-data"]
   schedule = "0 10 * * *"
+  timeout = 120
