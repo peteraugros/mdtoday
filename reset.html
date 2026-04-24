@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html>
+<head><title>MD Today Reset</title></head>
+<body>
+<h2>Resetting MD Today...</h2>
+<pre id="log"></pre>
+<script>
+var log = document.getElementById('log');
+function msg(s) { log.textContent += s + '\n'; }
+
+// Unregister all service workers
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.getRegistrations().then(function(regs) {
+    msg('Found ' + regs.length + ' service worker(s)');
+    regs.forEach(function(r) {
+      r.unregister().then(function() { msg('Unregistered: ' + r.scope); });
+    });
+  });
+} else {
+  msg('No service worker support');
+}
+
+// Clear all caches
+if ('caches' in window) {
+  caches.keys().then(function(names) {
+    msg('Found ' + names.length + ' cache(s)');
+    names.forEach(function(name) {
+      caches.delete(name).then(function() { msg('Deleted cache: ' + name); });
+    });
+  });
+} else {
+  msg('No cache API');
+}
+
+// Clear localStorage
+try {
+  localStorage.clear();
+  msg('localStorage cleared');
+} catch(e) {
+  msg('localStorage error: ' + e);
+}
+
+msg('Done. Wait 3 seconds then tap the link below.');
+setTimeout(function() {
+  var a = document.createElement('a');
+  a.href = '/index.html';
+  a.textContent = 'Go to MD Today →';
+  a.style.fontSize = '24px';
+  document.body.appendChild(a);
+}, 3000);
+</script>
+</body>
+</html>
