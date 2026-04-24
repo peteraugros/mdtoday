@@ -20,7 +20,10 @@ function currentSchoolYear() {
   const endYear = String(startYear + 1).slice(-2);
   return `${startYear}-${endYear}`;
 }
-const LEVELS = ['Varsity', 'JV Red', 'JV Gray', 'Freshman'];
+// Only scrape Varsity to stay under the athletics site's rate limit.
+// 30 sports × 1 level = 30 schedule requests (vs 120 with all 4 levels).
+// JV/Freshman schedules can be added back once we have a slower scrape strategy.
+const LEVELS = ['Varsity'];
 const STALE_MS = 36 * 60 * 60 * 1000; // 36 hours
 
 // ---------------------------------------------------------------------------
@@ -41,7 +44,7 @@ export default async (req, context) => {
       const data = await scrapeAll();
       const payload = { ...data, generated_at: new Date().toISOString() };
       await store.setJSON('latest', payload);
-      return respond({ ...payload, source: 'scrape' });
+      return respond({ ...payload, source: 'scrape' }, 200, true);
     } catch (err) {
       console.error('Scrape failed, falling back to cache:', { err });
       return serveCached(store, err);
@@ -73,12 +76,12 @@ async function serveCached(store, err = null) {
   }
 }
 
-function respond(body, status = 200) {
+function respond(body, status = 200, noCache = false) {
   return new Response(JSON.stringify(body), {
     status,
     headers: {
       'content-type': 'application/json',
-      'cache-control': 'public, max-age=3600'
+      'cache-control': noCache ? 'no-cache' : 'public, max-age=3600'
     }
   });
 }
@@ -299,7 +302,7 @@ async function scrapeAll() {
         console.warn(`Roster fetch failed: ${sport.slug}/${level}`, { err });
       }
 
-      await sleep(300); // Rate limit: 300ms between level iterations
+      await sleep(500); // Rate limit: 500ms between requests
     }
   }
 
