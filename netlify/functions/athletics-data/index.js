@@ -279,14 +279,141 @@ function slugToName(slug) {
 }
 
 // ---------------------------------------------------------------------------
+// iCal feed → today's sport slugs
+// ---------------------------------------------------------------------------
+
+const ICAL_URL = 'https://www.materdei.org/apps/events/ical/?id=33';
+
+// Maps iCal SUMMARY prefixes to athletics site slugs.
+// The core prefix (before @ or vs) determines the sport.
+const ICAL_PREFIX_TO_SLUG = {
+  'V Baseball':                 'baseball',
+  'JV Red Baseball':            'baseball',
+  'JV Gray Baseball':           'baseball',
+  'FR Baseball':                'baseball',
+  'V Basketball, Boys':         'basketball-boys',
+  'JV Red Basketball, Boys':    'basketball-boys',
+  'JV Gray Basketball, Boys':   'basketball-boys',
+  'FR Basketball, Boys':        'basketball-boys',
+  'V Basketball, Girls':        'basketball-girls',
+  'JV Red Basketball, Girls':   'basketball-girls',
+  'JV Gray Basketball, Girls':  'basketball-girls',
+  'V Cross Country, Boys':      'cross-country-boys-2',
+  'V Cross Country, Girls':     'cross-country-boys-2',
+  'V Football':                 'football',
+  'JV Red Football':            'football',
+  'JV Gray Football':           'football',
+  'FR Football':                'football',
+  'V Golf, Boys':               'golf-boys',
+  'V Golf, Girls':              'golf-girls',
+  'V Lacrosse, Boys':           'lacrosse-boys-2',
+  'JV Red Lacrosse, Boys':      'lacrosse-boys-2',
+  'V Lacrosse, Girls':          'lacrosse-girls',
+  'JV Red Lacrosse, Girls':     'lacrosse-girls',
+  'V Soccer, Boys':             'soccer-boys',
+  'JV Red Soccer, Boys':        'soccer-boys',
+  'JV Gray Soccer, Boys':       'soccer-boys',
+  'V Soccer, Girls':            'soccer-girls',
+  'JV Red Soccer, Girls':       'soccer-girls',
+  'JV Gray Soccer, Girls':      'soccer-girls',
+  'V Softball':                 'softball',
+  'JV Red Softball':            'softball',
+  'V Swimming, Boys':           'swimming-diving-boys-3',
+  'V Swimming, Girls':          'swimming-diving-girls',
+  'V Tennis, Boys':              'tennis-boys',
+  'V Tennis, Girls':             'tennis-girls',
+  'V Track & Field, Boys':      'track-field-boys-3',
+  'V Track & Field, Girls':     'track-field-boys-3',
+  'V Volleyball, Boys':         'volleyball-boys',
+  'JV Red Volleyball, Boys':    'volleyball-boys',
+  'V Volleyball, Girls':        'volleyball-girls',
+  'JV Red Volleyball, Girls':   'volleyball-girls',
+  'JV Gray Volleyball, Girls':  'volleyball-girls',
+  'V Water Polo, Boys':         'water-polo-boys',
+  'JV Red Water Polo, Boys':    'water-polo-boys',
+  'V Water Polo, Girls':        'water-polo-girls',
+  'JV Red Water Polo, Girls':   'water-polo-girls',
+  'V Wrestling':                'wrestling-boys',
+  'V Beach Volleyball':         'beach-volleyball-girls',
+  'V Flag Football':            'flag-football-girls',
+  'V Competitive Cheer':        'traditional-competitive-cheer',
+};
+
+function icalPrefixToSlug(summary) {
+  const core = summary.replace(/\s*[@(].*$/, '').replace(/\s+vs\.?\s+.*$/i, '').trim();
+  if (ICAL_PREFIX_TO_SLUG[core]) return ICAL_PREFIX_TO_SLUG[core];
+  for (const [prefix, slug] of Object.entries(ICAL_PREFIX_TO_SLUG)) {
+    if (core.startsWith(prefix)) return slug;
+  }
+  return null;
+}
+
+/**
+ * Fetch today's iCal events and return the set of sport slugs that have games.
+ * Uses simple text parsing — no ical.js dependency needed server-side.
+ */
+async function getTodaysSportSlugs() {
+  try {
+    const res = await fetch(ICAL_URL);
+    if (!res.ok) throw new Error(`iCal fetch: ${res.status}`);
+    const text = await res.text();
+
+    // Get today's date in YYYYMMDD format (Pacific time)
+    const now = new Date();
+    const pacific = new Date(now.toLocaleString('en-US', { timeZone: 'America/Los_Angeles' }));
+    const y = pacific.getFullYear();
+    const m = String(pacific.getMonth() + 1).padStart(2, '0');
+    const d = String(pacific.getDate()).padStart(2, '0');
+    const todayStr = `${y}${m}${d}`;
+
+    // Simple line-by-line parse: find events with DTSTART matching today
+    const slugs = new Set();
+    const lines = text.split('\n');
+    let currentSummary = null;
+    let currentDateMatch = false;
+
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (trimmed.startsWith('BEGIN:VEVENT')) {
+        currentSummary = null;
+        currentDateMatch = false;
+      }
+      if (trimmed.startsWith('DTSTART') && trimmed.includes(todayStr)) {
+        currentDateMatch = true;
+      }
+      if (trimmed.startsWith('SUMMARY:')) {
+        currentSummary = trimmed.slice(8).trim();
+      }
+      if (trimmed === 'END:VEVENT' && currentDateMatch && currentSummary) {
+        const slug = icalPrefixToSlug(currentSummary);
+        if (slug) slugs.add(slug);
+      }
+    }
+
+    console.log(`iCal: found ${slugs.size} sports with games today: ${[...slugs].join(', ')}`);
+    return slugs;
+  } catch (err) {
+    console.warn('iCal fetch failed, scraping all sports:', { err });
+    return null; // null = scrape everything as fallback
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Assembly
 // ---------------------------------------------------------------------------
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 async function scrapeAll() {
-  const sports = await discoverSports();
-  console.log(`Discovered ${sports.length} sports`);
+  const todaySlugs = await getTodaysSportSlugs();
+  const allSports = await discoverSports();
+  console.log(`Discovered ${allSports.length} sports`);
+
+  // Filter to only sports with games today (if iCal succeeded)
+  const sports = todaySlugs
+    ? allSports.filter(s => todaySlugs.has(s.slug))
+    : allSports;
+  console.log(`Scraping ${sports.length} sports${todaySlugs ? ' (filtered by iCal)' : ' (all — iCal unavailable)'}`);
 
   const games = [];
   const rosters = {};
