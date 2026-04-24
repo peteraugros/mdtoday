@@ -30,11 +30,13 @@ const STALE_MS = 36 * 60 * 60 * 1000; // 36 hours
 export default async (req, context) => {
   const store = getStore('athletics-data');
 
-  // Scheduled invocation (cron) → scrape fresh
-  // GET request → serve from cache (scrape only on cron)
+  // Scheduled invocation (cron) or manual trigger → scrape fresh
+  // GET request → serve from cache (scrape only on cron/trigger)
+  const url = new URL(req.url);
   const isCron = context?.schedule;
+  const isManualTrigger = url.searchParams.get('scrape') === 'md1950';
 
-  if (isCron) {
+  if (isCron || isManualTrigger) {
     try {
       const data = await scrapeAll();
       const payload = { ...data, generated_at: new Date().toISOString() };
