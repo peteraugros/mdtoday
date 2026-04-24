@@ -162,7 +162,10 @@ async function fetchSchedule(sport, level) {
   const html = await res.text();
 
   // WordPress returns '0' or '-1' on auth/nonce failure
-  if (!html || html.trim() === '0' || html.trim() === '-1') return [];
+  if (!html || html.trim() === '0' || html.trim() === '-1') {
+    console.warn(`AJAX nonce failure for ${sport.slug}/${level}: response="${html?.trim()}"`);
+    return [];
+  }
 
   return parseScheduleHTML(html, sport, level);
 }
@@ -270,6 +273,9 @@ async function scrapeAll() {
     for (const level of LEVELS) {
       try {
         const schedule = await fetchSchedule(sport, level);
+        if (schedule.length > 0) {
+          console.log(`${sport.slug}/${level}: ${schedule.length} games`);
+        }
         games.push(...schedule);
       } catch (err) {
         console.warn(`Schedule fetch failed: ${sport.slug}/${level}`, { err });
