@@ -1,10 +1,12 @@
 // netlify/functions/dismissals.js
-// Shared dismissal state backed by Netlify Blobs (REST API, no npm package).
+// Shared dismissal state backed by Netlify Blobs.
 // GET  → returns today's dismissals as JSON array
 // POST → adds a dismissal record, returns updated array
 // DELETE → removes a dismissal by _id, returns updated array
 //
 // Blob key: "dismissals-YYYY-MM-DD" (one blob per day).
+
+import { getStore } from '@netlify/blobs';
 
 function todayKey() {
   const now = new Date();
@@ -15,50 +17,18 @@ function todayKey() {
   return `dismissals-${y}-${m}-${d}`;
 }
 
-// ---------------------------------------------------------------------------
-// Netlify Blobs REST helpers (no @netlify/blobs package needed)
-// Uses NETLIFY_BLOBS_CONTEXT env var injected by Netlify at runtime.
-// ---------------------------------------------------------------------------
-
-function getBlobContext() {
-  const raw = process.env.NETLIFY_BLOBS_CONTEXT;
-  if (!raw) return null;
+async function readDismissals(store, key) {
   try {
-    return JSON.parse(raw);
-  } catch {
-    return null;
-  }
-}
-
-function blobUrl(ctx, store, key) {
-  return `${ctx.apiURL}/${ctx.siteID}/${store}/${key}`;
-}
-
-function blobHeaders(ctx) {
-  return {
-    Authorization: `Bearer ${ctx.token}`,
-    'Content-Type': 'application/json',
-  };
-}
-
-async function readDismissals(ctx, key) {
-  try {
-    const res = await fetch(blobUrl(ctx, 'dismissals', key), {
-      headers: blobHeaders(ctx),
-    });
-    if (res.status === 404 || !res.ok) return [];
-    return await res.json();
+    const data = await store.get(key, { type: 'json' });
+    if (!data) return [];
+    return data;
   } catch {
     return [];
   }
 }
 
-async function writeDismissals(ctx, key, records) {
-  await fetch(blobUrl(ctx, 'dismissals', key), {
-    method: 'PUT',
-    headers: blobHeaders(ctx),
-    body: JSON.stringify(records),
-  });
+async function writeDismissals(store, key, records) {
+  await store.setJSON(key, records);
 }
 
 function jsonResponse(data, status = 200) {
@@ -72,18 +42,14 @@ function jsonResponse(data, status = 200) {
 }
 
 export default async (req, context) => {
-  const ctx = getBlobContext();
-  if (!ctx) {
-    return jsonResponse({ error: 'Blob store not available' }, 500);
-  }
-
+  const store = getStore('dismissals');
   const key = todayKey();
 
   // GET — return today's dismissals, optionally filtered by sport_id
   if (req.method === 'GET') {
     const url = new URL(req.url);
     const sportFilter = url.searchParams.get('sport_id');
-    let records = await readDismissals(ctx, key);
+    let records = await readDismissals(store, key);
     if (sportFilter) {
       records = records.filter(r => r.sport_id === sportFilter);
     }
@@ -103,7 +69,7 @@ export default async (req, context) => {
       return jsonResponse({ error: 'Missing required fields' }, 400);
     }
 
-    const records = await readDismissals(ctx, key);
+    const records = await readDismissals(store, key);
 
     // Duplicate guard
     const isDuplicate = records.some(r => {
@@ -122,7 +88,7 @@ export default async (req, context) => {
 
     body._id = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
     records.push(body);
-    await writeDismissals(ctx, key, records);
+    await writeDismissals(store, key, records);
 
     return jsonResponse({ ok: true, duplicate: false, records });
   }
@@ -140,12 +106,18 @@ export default async (req, context) => {
       return jsonResponse({ error: 'Missing _id' }, 400);
     }
 
-    let records = await readDismissals(ctx, key);
+    let records = await readDismissals(store, key);
     records = records.filter(r => r._id !== body._id);
-    await writeDismissals(ctx, key, records);
+    await writeDismissals(store, key, records);
 
     return jsonResponse({ ok: true, records });
   }
 
   return new Response('Method not allowed', { status: 405 });
+};
+
+// Netlify Functions v2 config — required for non-scheduled functions
+// to be detected as v2 (which enables @netlify/blobs auto-injection).
+export const config = {
+  path: '/.netlify/functions/dismissals',
 };
