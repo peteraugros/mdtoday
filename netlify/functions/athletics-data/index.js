@@ -88,7 +88,10 @@ function respond(body, status = 200) {
 // ---------------------------------------------------------------------------
 
 async function discoverSports() {
-  const html = await fetch(SITE).then(r => r.text());
+  const res = await fetch(SITE);
+  console.log(`Homepage fetch: ${res.status} ${res.statusText}, content-length: ${res.headers.get('content-length')}`);
+  const html = await res.text();
+  console.log(`Homepage HTML length: ${html.length}, first 200 chars: ${html.substring(0, 200)}`);
   const $ = cheerio.load(html);
   const seen = new Set();
   const sports = [];
@@ -103,6 +106,8 @@ async function discoverSports() {
     seen.add(slug);
     sports.push({ slug, name: $(el).text().trim() });
   });
+
+  console.log(`Sport discovery found ${sports.length} sports: ${sports.map(s => s.slug).join(', ')}`);
 
   // For each sport, fetch its schedule page to get sportID + nonce
   const results = [];
