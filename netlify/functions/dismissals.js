@@ -21,16 +21,16 @@ function todayKey() {
 
 async function readDismissals(store, key) {
   try {
-    const raw = await store.get(key);
-    if (!raw) return [];
-    return JSON.parse(raw);
+    const data = await store.get(key, { type: 'json' });
+    if (!data) return [];
+    return data;
   } catch {
     return [];
   }
 }
 
 async function writeDismissals(store, key, records) {
-  await store.set(key, JSON.stringify(records));
+  await store.setJSON(key, records);
 }
 
 function jsonResponse(data, status = 200) {
@@ -43,7 +43,7 @@ function jsonResponse(data, status = 200) {
   });
 }
 
-export default async (req) => {
+export default async (req, context) => {
   const store = getStore('dismissals');
   const key = todayKey();
 
