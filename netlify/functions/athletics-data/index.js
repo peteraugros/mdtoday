@@ -20,10 +20,7 @@ function currentSchoolYear() {
   const endYear = String(startYear + 1).slice(-2);
   return `${startYear}-${endYear}`;
 }
-// Only scrape Varsity to stay under the athletics site's rate limit.
-// 30 sports × 1 level = 30 schedule requests (vs 120 with all 4 levels).
-// JV/Freshman schedules can be added back once we have a slower scrape strategy.
-const LEVELS = ['Varsity'];
+const LEVELS = ['Varsity', 'JV Red', 'JV Gray', 'Freshman'];
 const STALE_MS = 36 * 60 * 60 * 1000; // 36 hours
 
 // ---------------------------------------------------------------------------
@@ -288,22 +285,22 @@ async function scrapeAll() {
           console.log(`${sport.slug}/${level}: ${schedule.length} games`);
         }
         games.push(...schedule);
+
+        // Only fetch roster if this level has games (saves requests)
+        try {
+          const roster = await fetchRoster(sport, level);
+          if (roster.length > 0) {
+            const key = `${sport.slug}_${level.toLowerCase().replace(/\s+/g, '_')}`;
+            rosters[key] = roster;
+          }
+        } catch (err) {
+          console.warn(`Roster fetch failed: ${sport.slug}/${level}`, { err });
+        }
       } catch (err) {
         console.warn(`Schedule fetch failed: ${sport.slug}/${level}`, { err });
       }
-
-      try {
-        const roster = await fetchRoster(sport, level);
-        if (roster.length > 0) {
-          const key = `${sport.slug}_${level.toLowerCase().replace(/\s+/g, '_')}`;
-          rosters[key] = roster;
-        }
-      } catch (err) {
-        console.warn(`Roster fetch failed: ${sport.slug}/${level}`, { err });
-      }
-
-      await sleep(500); // Rate limit: 500ms between requests
     }
+    await sleep(2000); // 2s pause between sports to avoid rate limiting
   }
 
   console.log(`Scraped ${games.length} games, ${Object.keys(rosters).length} rosters`);
