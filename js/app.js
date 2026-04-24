@@ -297,11 +297,14 @@ function tickTemporal(now) {
     const isLastBlock = status.status === 'period' && !status.nextBlock && !status.currentTracks;
     const suffix = isLastBlock ? 'remaining' : 'until next block';
 
-    const m = Math.floor(totalSeconds / 60);
+    const h = Math.floor(totalSeconds / 3600);
+    const m = Math.floor((totalSeconds % 3600) / 60);
     const s = totalSeconds % 60;
-    const timeStr = m > 0
-      ? `${m}m ${String(s).padStart(2, '0')}s`
-      : `${s}s`;
+    const timeStr = h > 0
+      ? `${h}h ${String(m).padStart(2, '0')}m ${String(s).padStart(2, '0')}s`
+      : m > 0
+        ? `${m}m ${String(s).padStart(2, '0')}s`
+        : `${s}s`;
     els.countdownText.textContent = `${timeStr} ${suffix}`;
     els.countdownText.classList.add('now-header__countdown--active');
   }
