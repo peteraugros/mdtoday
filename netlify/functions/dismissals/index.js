@@ -115,9 +115,3 @@ export default async (req, context) => {
 
   return new Response('Method not allowed', { status: 405 });
 };
-
-// Netlify Functions v2 config — required for non-scheduled functions
-// to be detected as v2 (which enables @netlify/blobs auto-injection).
-export const config = {
-  path: '/.netlify/functions/dismissals',
-};
