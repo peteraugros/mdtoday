@@ -508,12 +508,53 @@ function getNextSchoolDay(data, date) {
 }
 
 /**
+ * Get the final bell time (end of last block) for a date, in minutes since midnight.
+ * Returns null if no template or no blocks.
+ */
+function getFinalBellMinutes(data, date) {
+  const resolved = resolveDay(data, date);
+  if (!resolved.template || !resolved.template.blocks || resolved.template.blocks.length === 0) {
+    return null;
+  }
+  let max = 0;
+  for (const block of resolved.template.blocks) {
+    const [h, m] = block.end_time.split(':').map(Number);
+    const mins = h * 60 + m;
+    if (mins > max) max = mins;
+  }
+  return max;
+}
+
+/**
+ * Check if the next school day is within a given number of hours from now.
+ */
+function isNextSchoolWithinHours(nextSchool, date, hours) {
+  const nextMidnight = new Date(nextSchool.date);
+  nextMidnight.setHours(0, 0, 0, 0);
+  const hoursUntil = (nextMidnight.getTime() - date.getTime()) / (1000 * 60 * 60);
+  return hoursUntil > 0 && hoursUntil <= hours;
+}
+
+/**
  * Resolve the Now view's display state.
  *
  * Returns { base, override, nextSchoolDay } where:
  *   base:          'SCHOOL_DAY' | 'WEEKEND' | 'BREAK' | 'SINGLE_HOLIDAY'
- *   override:      'TRANSITION' | null
+ *   override:      'TRANSITION' | 'POST_SCHOOL' | null
  *   nextSchoolDay: { date, dateStr, dayLabel, summary, spiritDress } | null
+ *
+ * TRANSITION triggers:
+ *   Trigger 1 (non-school-day evenings):
+ *     base ∈ {WEEKEND, BREAK, SINGLE_HOLIDAY} AND hour >= 17
+ *     AND nextSchoolDay within 18h
+ *
+ *   Trigger 2 (weeknight after final bell):
+ *     base == SCHOOL_DAY AND now >= finalBell AND not Friday
+ *     AND nextSchoolDay within 18h
+ *
+ * POST_SCHOOL:
+ *   base == SCHOOL_DAY AND now >= finalBell AND not Friday
+ *   AND (no nextSchoolDay OR nextSchoolDay > 18h)
  */
 export function resolveNowState(data, date = new Date()) {
   if (!data || data.source === 'none') {
@@ -521,16 +562,31 @@ export function resolveNowState(data, date = new Date()) {
   }
 
   const base = getBaseState(data, date);
-  const nextSchool = (base !== 'SCHOOL_DAY') ? getNextSchoolDay(data, date) : null;
 
-  // TRANSITION: fires at 5pm+ when next school day is within 18 hours
-  if (base !== 'SCHOOL_DAY' && nextSchool && date.getHours() >= 17) {
-    const nextMidnight = new Date(nextSchool.date);
-    nextMidnight.setHours(0, 0, 0, 0);
-    const hoursUntil = (nextMidnight.getTime() - date.getTime()) / (1000 * 60 * 60);
-    if (hoursUntil > 0 && hoursUntil <= 18) {
-      return { base, override: 'TRANSITION', nextSchoolDay: nextSchool };
+  // --- SCHOOL_DAY: check for weeknight TRANSITION (Trigger 2) ---
+  if (base === 'SCHOOL_DAY') {
+    const dow = date.getDay();
+    const isFriday = dow === 5;
+    const finalBell = getFinalBellMinutes(data, date);
+    const nowMinutes = date.getHours() * 60 + date.getMinutes();
+
+    if (finalBell && nowMinutes >= finalBell && !isFriday) {
+      const nextSchool = getNextSchoolDay(data, date);
+      if (nextSchool && isNextSchoolWithinHours(nextSchool, date, 18)) {
+        return { base, override: 'TRANSITION', nextSchoolDay: nextSchool };
+      }
+      // After bell but TRANSITION can't fire — suppress stale blocks
+      return { base, override: 'POST_SCHOOL', nextSchoolDay: null };
     }
+
+    return { base, override: null, nextSchoolDay: null };
+  }
+
+  // --- Non-school-day: check for evening TRANSITION (Trigger 1) ---
+  const nextSchool = getNextSchoolDay(data, date);
+
+  if (nextSchool && date.getHours() >= 17 && isNextSchoolWithinHours(nextSchool, date, 18)) {
+    return { base, override: 'TRANSITION', nextSchoolDay: nextSchool };
   }
 
   return { base, override: null, nextSchoolDay: nextSchool };

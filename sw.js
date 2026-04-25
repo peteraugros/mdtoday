@@ -9,7 +9,7 @@
 //   CACHE_NAME encodes the app version. Bump in lockstep with footer version
 //   strings in all HTML files.
 
-const CACHE_NAME = 'mdtoday-v2.3.0';
+const CACHE_NAME = 'mdtoday-v2.4.0';
 
 const PRECACHE_URLS = [
   './',

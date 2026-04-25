@@ -108,6 +108,16 @@ function timeToMinutes(hhmm) {
   return h * 60 + m;
 }
 
+function getLastBlockEndMinutes(template) {
+  if (!template || !template.blocks || template.blocks.length === 0) return null;
+  let max = 0;
+  for (const block of template.blocks) {
+    const mins = timeToMinutes(block.end_time);
+    if (mins > max) max = mins;
+  }
+  return max;
+}
+
 
 /**
  * Extract block number from block_name (e.g., "Block 1" → "1", "Upper Lunch" → null).
@@ -135,8 +145,9 @@ function renderValidity(resolved, payload, nowState) {
   const el = els.validity;
   el.classList.remove('is-visible', 'is-stale', 'is-assumed', 'is-offline');
 
-  // Suppress assumed-state banner on non-school days — we know it's not a school day
-  if (resolved.trustState === 'assumed' && nowState && nowState.base !== 'SCHOOL_DAY') {
+  // Suppress assumed-state banner on non-school days and post-school states
+  if (resolved.trustState === 'assumed' && nowState
+      && (nowState.base !== 'SCHOOL_DAY' || nowState.override)) {
     return;
   }
 
@@ -188,6 +199,7 @@ function renderDeviation(resolved) {
 // ---------------------------------------------------------------------------
 
 const STATE_COPY = {
+  SCHOOL_DAY:     { emoji: null,                  message: "School\u2019s out for today." },
   WEEKEND:        { emoji: '\uD83C\uDF24\uFE0F', message: 'Enjoy your weekend.' },
   BREAK:          { emoji: '\uD83D\uDE0E',       message: 'Enjoy your break.' },
   SINGLE_HOLIDAY: { emoji: '\u2600\uFE0F',       message: 'Enjoy the day off.' },
@@ -238,8 +250,15 @@ function renderOffday(nowState, date) {
     els.offdayDemoted.textContent = baseCopy.message;
     els.offdayDemoted.hidden = false;
     hasContentBelow = true;
+  } else if (nowState.override === 'POST_SCHOOL') {
+    // POST_SCHOOL: after final bell, TRANSITION can't fire (next school >18h or Friday)
+    // Warm message only, no emoji, no preview
+    els.offdayEmoji.textContent = '';
+    els.offdayMessage.textContent = "School\u2019s out for today.";
+    els.offdayPreview.hidden = true;
+    els.offdayDemoted.hidden = true;
   } else {
-    // Base state warm message
+    // Base state warm message (WEEKEND, BREAK, SINGLE_HOLIDAY)
     const copy = STATE_COPY[nowState.base];
     const emoji = nowState.base === 'BREAK' ? getBreakEmoji(date) : copy.emoji;
 
@@ -374,8 +393,20 @@ function tickTemporal(now) {
     return;
   }
 
-  // Non-school-day or no template — static display, no tick updates needed
-  if (currentNowState && currentNowState.base !== 'SCHOOL_DAY') return;
+  // Auto-detect TRANSITION / POST_SCHOOL after final bell on school days
+  if (!transitionChecked && currentNowState && currentNowState.base === 'SCHOOL_DAY'
+      && !currentNowState.override && currentResolved.template) {
+    const finalBell = getLastBlockEndMinutes(currentResolved.template);
+    const nowMin = now.getHours() * 60 + now.getMinutes();
+    if (finalBell && nowMin >= finalBell) {
+      transitionChecked = true;
+      renderStable(now);
+      return;
+    }
+  }
+
+  // Non-school-day or override active — static display, no tick updates needed
+  if (currentNowState && (currentNowState.base !== 'SCHOOL_DAY' || currentNowState.override)) return;
   if (!currentResolved.template) {
     els.countdownText.textContent = '';
     els.countdownText.classList.remove('now-header__countdown--active');
@@ -439,8 +470,8 @@ function renderStable(now) {
   renderValidity(currentResolved, currentPayload, currentNowState);
   renderDeviation(currentResolved);
 
-  // Non-school-day states: warm message + optional tomorrow preview
-  if (currentNowState.base !== 'SCHOOL_DAY') {
+  // Non-school-day states OR school-day with override (TRANSITION / POST_SCHOOL)
+  if (currentNowState.base !== 'SCHOOL_DAY' || currentNowState.override) {
     renderOffday(currentNowState, now);
     return;
   }
