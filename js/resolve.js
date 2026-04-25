@@ -56,6 +56,37 @@ const ANNOUNCEMENT_INCLUDE_KEYWORDS = [
   'liturgy',
 ];
 
+// ---------------------------------------------------------------------------
+// Constants — spirit dress detection
+// ---------------------------------------------------------------------------
+//
+// Events matching these patterns are spirit dress days. They are extracted
+// (not excluded) and surfaced on the Upcoming view as a dedicated row.
+// They remain excluded from announcements (see ANNOUNCEMENT_EXCLUDE_PATTERNS).
+
+const SPIRIT_DRESS_PATTERNS = [
+  /spirit (week|day|bottoms|dress)/i,  // "Spirit Day - Hawaiian", "Spirit Week", "Spirit Bottoms"
+  /^Special Dress/i,                    // "Special Dress - Red, White & Blue"
+];
+
+/**
+ * Clean a spirit dress SUMMARY into just the theme.
+ *
+ * Examples:
+ *   "Special Dress - Red, White & Blue"  → "Red, White & Blue"
+ *   "Spirit Day - Hawaiian"              → "Hawaiian"
+ *   "Spirit Week - Pajama Day"           → "Pajama Day"
+ *   "Spirit Bottoms"                     → "Spirit Bottoms"  (no dash → keep as-is)
+ */
+function cleanSpiritDressTheme(summary) {
+  // Strip prefix up to and including " - " or " — "
+  const dashIdx = summary.search(/\s[-\u2014]\s/);
+  if (dashIdx !== -1) {
+    return summary.slice(dashIdx).replace(/^\s[-\u2014]\s/, '').trim();
+  }
+  return summary.trim();
+}
+
 // Phrases that explicitly disqualify events even if they match an include.
 // Applied after includes — an event that matches both is excluded.
 const ANNOUNCEMENT_EXCLUDE_PATTERNS = [
@@ -324,4 +355,33 @@ export function resolveDay(data, date = new Date()) {
     trustState,
     unmatchedSummary: null,
   };
+}
+
+// ---------------------------------------------------------------------------
+// Spirit dress extraction (used by upcoming-view.js)
+// ---------------------------------------------------------------------------
+
+/**
+ * Return cleaned spirit dress themes for a given date.
+ *
+ * @param {Object} data   The payload from loadData()
+ * @param {Date}   date   The date to check
+ * @returns {string[]}    Array of cleaned theme strings (empty if none)
+ */
+export function getSpiritDressEvents(data, date) {
+  if (!data || !data.events) return [];
+
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  const dateStr = `${y}-${m}-${d}`;
+
+  const themes = [];
+  for (const event of data.events) {
+    if (event.date !== dateStr) continue;
+    if (SPIRIT_DRESS_PATTERNS.some(p => p.test(event.summary))) {
+      themes.push(cleanSpiritDressTheme(event.summary));
+    }
+  }
+  return themes;
 }

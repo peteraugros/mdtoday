@@ -1337,22 +1337,41 @@ Replaces the teacher's manual roll-call-and-data-entry loop with a kiosk student
 
 ### The problem
 
-Current attendance flow: teacher takes roll call (scan room, count, check seating chart) → logs into Aeries → navigates to attendance → finds the right class → marks absent students → if a student arrives late, goes back in and changes absent to tardy. 3-5 minutes per class period, 5 periods a day, every day. That's 15-25 minutes of instructional time lost daily.
+Current attendance flow: teacher takes roll call (scan room, count, check seating chart) → logs into Aeries → navigates to attendance → finds the right class → marks absent students → if a student arrives late, goes back in and changes absent to tardy. 3-5 minutes per class period, 5 periods a day, every day. That's **~400 minutes per teacher per month** of instructional time lost.
 
-### MVP features (non-negotiable for v1)
+### The v2 design (requires DB + auth + user identity)
 
-1. **Teacher login + class selection** — teacher opens the app on a tablet/Chromebook, selects which period/class
-2. **Roster display** — grid of student names, big tap targets. Seeded from CSV or manual entry for the pilot (no API dependency)
-3. **Tap-to-check-in** — student taps their name as they enter, it turns green. One tap, done
-4. **Bell-schedule awareness** — the app knows when the period starts (MD Today already has this data). Taps before the bell = present. Taps after = tardy (auto-categorized, teacher doesn't think about it)
-5. **End-of-period summary** — clean list: present, tardy, absent. One screen
-6. **Export** — one-click copy-to-clipboard or CSV download, formatted to match Aeries import. Ships without API write access
+The original MVP spec assumed a kiosk model (teacher's device, students tap their name). That design was rejected because:
+- **Roster entry friction** — typing 30 names × 8 periods = 240 names manually. No teacher is doing that.
+- **localStorage fragility** — browser clears, iOS storage pressure, PWA reinstall all wipe rosters with no recovery. Teacher re-enters 240 names.
+- **No sync** — roster on one device doesn't carry to another.
 
-### What's out of scope for MVP
+These problems are unsolvable without a real database and persistent storage. Attendance is a **v2 feature**, gated on: database, authentication, user identity, and relationship modeling (teacher↔student, parent↔student).
 
-- Aeries API integration (read or write) — seed rosters manually for the pilot
+### The right design (v2, with auth + relationships)
+
+Once v2 infrastructure exists, attendance flips from teacher-driven to **student-driven**:
+
+1. **Bell rings.** Students open the Now view — which they're already checking — and tap a "Present" button.
+2. **Teacher's screen fills up in real-time.** Large, visible count: **23/26 present.**
+3. **Three names remain in the absent column.** Teacher glances at the screen and calls out: "So Jack, Lizzy, and Trenton are not here?"
+4. **Room confirms or silence confirms.** One tap. Done. Move on to teaching.
+
+The teacher never reads thirty names. They read three. The room does the verification.
+
+**Why this is better than the kiosk model:**
+- No shared device, no line, no kiosk — each student's own phone is the input device.
+- Rosters come from the database (seeded from Aeries or manual import once), not localStorage.
+- Bell-schedule awareness is free — MD Today already resolves the current period. Taps before the bell = present. Taps after = tardy (auto-categorized).
+- **Students open the app every block.** This is the retention mechanic that makes attendance the killer feature — 4-5 opens per day per student, baked into the school's actual workflow.
+
+### The pitch number
+
+**~400 minutes per teacher per month** returned to instruction. Multiply across the faculty. That's the number you bring to the principal. Not "we built a schedule app" — "we increased attendance reporting accuracy and gave teachers back 400 minutes a month."
+
+### What's out of scope even for v2 attendance
+
 - Student photos
-- Student-side self-reporting (spoofing risk without verification; teacher-as-kiosk-operator is the verification)
 - Anti-spoofing (QR codes, geofencing) — teacher is in the room, they're the verification
 - Parent notifications
 - Analytics, trends, reports
@@ -1378,13 +1397,14 @@ Aeries has a documented REST API (JSON, vendor-friendly, certificate-based auth)
 
 The stakes are higher. A dismissal bug means a kid waits an extra 5 minutes. An attendance bug means a kid is marked absent when they're present — triggering truancy letters, parental calls, grade consequences. The trust-state architecture (showing confidence level alongside data) is the right foundation, but reliability is non-negotiable.
 
-### Architecture notes
+### Architecture notes (v2)
 
-- Same Dexie local state + Netlify Blobs shared store as dismissals
-- Same PIN-gated teacher role
+- Requires real database (not Dexie/localStorage) for roster persistence and cross-device sync
+- Requires auth + user identity — student taps "Present" from their own device, system must know who they are
+- Requires relationship modeling — teacher↔class↔students so the teacher's view shows the right roster per period
 - Bell-schedule awareness is free — MD Today already resolves the current period and countdown
-- Could be a new view under the teacher role or an extension of the existing dismiss flow
-- Roster source for MVP: manual CSV import or Sheet tab. API integration is v2
+- Roster seeding: Aeries API read access (if available) or one-time CSV import by admin. Never manual per-teacher entry.
+- Aeries write access determines whether this is a full-loop product (tap → Aeries updated) or a teacher-assist tool (tap → teacher pastes a short list into Aeries in 10 seconds)
 
 ---
 

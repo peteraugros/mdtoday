@@ -6,7 +6,7 @@
 // Drill-in reuses the Now view's block-list layout with personal overlay.
 
 import { loadData, isFresh, FRESHNESS_HORIZON_MS } from './data.js';
-import { resolveDay } from './resolve.js';
+import { resolveDay, getSpiritDressEvents } from './resolve.js';
 
 // ---------------------------------------------------------------------------
 // DOM references
@@ -140,7 +140,8 @@ function getUpcomingDays(payload, count = 7) {
   for (let i = 0; i < count; i++) {
     const date = new Date(cursor);
     const resolved = resolveDay(payload, date);
-    days.push({ date, resolved });
+    const spiritDress = getSpiritDressEvents(payload, date);
+    days.push({ date, resolved, spiritDress });
     cursor.setDate(cursor.getDate() + 1);
   }
 
@@ -178,7 +179,7 @@ function renderList(days) {
   els.upcomingEmpty.hidden = true;
   els.upcomingList.hidden = false;
 
-  const items = days.map(({ date, resolved }) => {
+  const items = days.map(({ date, resolved, spiritDress }) => {
     const li = document.createElement('li');
     li.className = 'upcoming-item';
 
@@ -209,6 +210,14 @@ function renderList(days) {
       annDiv.className = 'upcoming-item__announcement';
       annDiv.textContent = resolved.announcement;
       li.appendChild(annDiv);
+    }
+
+    // Spirit dress row
+    if (spiritDress.length > 0) {
+      const spiritDiv = document.createElement('div');
+      spiritDiv.className = 'upcoming-item__spirit';
+      spiritDiv.textContent = `\uD83D\uDC55 Spirit Dress: ${spiritDress.join(', ')}`;
+      li.appendChild(spiritDiv);
     }
 
     // Tap to drill in (only if there's a schedule to show)

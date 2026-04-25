@@ -546,6 +546,16 @@
     margin-top: 2px;
   }
 
+  .upcoming-item__spirit {
+    font-size: 0.8125rem;
+    color: var(--md-gray-text);
+    margin-top: 6px;
+    padding: 6px 10px;
+    background: #FFF8E1;
+    border-radius: 6px;
+    font-weight: 500;
+  }
+
   .upcoming-empty {
     padding: var(--spacing-lg);
     background: var(--md-gray-surface);
