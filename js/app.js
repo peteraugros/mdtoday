@@ -12,6 +12,7 @@ import { loadData, isFresh } from './data.js';
 import { resolveDay, resolveNowState } from './resolve.js';
 import { getCurrentStatus } from './schedule.js';
 import { startCountdown } from './countdown.js';
+import { formatBlockLine, extractActiveBlocks } from './format.js';
 
 // ---------------------------------------------------------------------------
 // DOM references
@@ -107,17 +108,6 @@ function timeToMinutes(hhmm) {
   return h * 60 + m;
 }
 
-/**
- * Extract the active block numbers from a raw SUMMARY string.
- * "RED: B. 1, 3, 5, 7" → ['1','3','5','7']
- * Returns null if no block list found.
- */
-function extractActiveBlocks(summary) {
-  if (!summary) return null;
-  const match = summary.match(/B\.\s*([\d,\s]+)$/);
-  if (!match) return null;
-  return match[1].split(',').map(s => s.trim());
-}
 
 /**
  * Extract block number from block_name (e.g., "Block 1" → "1", "Upper Lunch" → null).
@@ -277,12 +267,7 @@ function renderNextSchoolPreview(nextSchool, muted) {
   preview.hidden = false;
   preview.classList.toggle('now-offday__preview--muted', muted);
 
-  // Block numbers from raw summary — own line, no parentheses
-  let blockLine = '';
-  if (nextSchool.summary) {
-    const blockMatch = nextSchool.summary.match(/B\.\s*([\d,\s]+)$/);
-    if (blockMatch) blockLine = `Blocks ${blockMatch[1].trim()}`;
-  }
+  const blockLine = formatBlockLine(nextSchool.summary);
 
   let html = `<div class="now-offday__preview-label">Next up</div>`;
   html += `<div class="now-offday__preview-day">${nextSchool.dayLabel}</div>`;
@@ -488,8 +473,9 @@ function renderStable(now) {
   const rawSummary = currentResolved.unmatchedSummary || findScheduleSummary();
   els.dayLabel.textContent = currentResolved.dayLabel || '';
   currentActiveBlocks = extractActiveBlocks(rawSummary);
-  if (currentActiveBlocks && els.dayBlocks) {
-    els.dayBlocks.textContent = `Blocks ${currentActiveBlocks.join(', ')}`;
+  const blockLine = formatBlockLine(rawSummary);
+  if (blockLine && els.dayBlocks) {
+    els.dayBlocks.textContent = blockLine;
     els.dayBlocks.hidden = false;
   } else if (els.dayBlocks) {
     els.dayBlocks.hidden = true;
