@@ -9,7 +9,7 @@
 // Personal schedule overlay reads from localStorage and applies automatically.
 
 import { loadData, isFresh } from './data.js';
-import { resolveDay } from './resolve.js';
+import { resolveDay, resolveNowState } from './resolve.js';
 import { getCurrentStatus } from './schedule.js';
 import { startCountdown } from './countdown.js';
 
@@ -30,12 +30,20 @@ const els = {
   deviation: $('deviation'),
   deviationText: $('deviation-text'),
 
+  nowHeader: $('now-header'),
   dayLabel: $('day-label'),
+  dayBlocks: $('day-blocks'),
   countdownText: $('countdown-text'),
 
   blocksList: $('blocks-list'),
   nowEmpty: $('now-empty'),
   nowEmptyText: $('now-empty-text'),
+
+  nowOffday: $('now-offday'),
+  offdayEmoji: $('offday-emoji'),
+  offdayMessage: $('offday-message'),
+  offdayPreview: $('offday-preview'),
+  offdayDemoted: $('offday-demoted'),
 
   personalizeSection: $('personalize-section'),
   personalizeBtn: $('personalize-btn'),
@@ -128,27 +136,19 @@ function extractBlockNumber(blockName, activeBlocks) {
   return match ? match[1] : null;
 }
 
-/**
- * Enhance day label with block number reinforcement.
- * "Red Day" + "RED: B. 1, 3, 5, 7" → "Red Day (Blocks 1, 3, 5, 7)"
- */
-function enhanceDayLabel(label, summary) {
-  if (!summary) return label;
-  const blockMatch = summary.match(/B\.\s*([\d,\s]+)$/);
-  if (blockMatch) {
-    const blocks = blockMatch[1].trim();
-    return `${label} (Blocks ${blocks})`;
-  }
-  return label;
-}
 
 // ---------------------------------------------------------------------------
 // Render: validity region
 // ---------------------------------------------------------------------------
 
-function renderValidity(resolved, payload) {
+function renderValidity(resolved, payload, nowState) {
   const el = els.validity;
   el.classList.remove('is-visible', 'is-stale', 'is-assumed', 'is-offline');
+
+  // Suppress assumed-state banner on non-school days — we know it's not a school day
+  if (resolved.trustState === 'assumed' && nowState && nowState.base !== 'SCHOOL_DAY') {
+    return;
+  }
 
   switch (resolved.trustState) {
     case 'confirmed':
@@ -165,7 +165,8 @@ function renderValidity(resolved, payload) {
       el.classList.add('is-visible', 'is-assumed');
       els.validityIcon.textContent = '?';
       els.validityTitle.textContent = 'Schedule assumed';
-      els.validityDetail.textContent = 'No matching event for today \u2014 confirm with your teacher.';
+      els.validityDetail.innerHTML =
+        'No matching event for today \u2014 check <a href="https://materdei.org" target="_blank" rel="noopener">materdei.org</a> for details.';
       return;
 
     case 'offline':
@@ -190,6 +191,117 @@ function renderDeviation(resolved) {
     els.deviation.classList.remove('is-visible');
     els.deviationText.textContent = '';
   }
+}
+
+// ---------------------------------------------------------------------------
+// Render: off-day state (WEEKEND / BREAK / SINGLE_HOLIDAY / TRANSITION)
+// ---------------------------------------------------------------------------
+
+const STATE_COPY = {
+  WEEKEND:        { emoji: '\uD83C\uDF24\uFE0F', message: 'Enjoy your weekend.' },
+  BREAK:          { emoji: '\uD83D\uDE0E',       message: 'Enjoy your break.' },
+  SINGLE_HOLIDAY: { emoji: '\u2600\uFE0F',       message: 'Enjoy the day off.' },
+  TRANSITION:     { emoji: '\uD83C\uDF19',       message: 'Getting ready for tomorrow' },
+};
+
+// Seasonal emoji for BREAK — derived from month, not break name.
+// Emoji lives in render config, not state logic (per spec).
+const BREAK_EMOJI = {
+  10: '\uD83E\uDD83',  // Nov (0-indexed: 10) → 🦃 Thanksgiving
+  11: '\uD83C\uDF84',  // Dec → 🎄 Christmas/Winter
+  0:  '\uD83C\uDF84',  // Jan → 🎄 Winter break carry-over
+  2:  '\uD83C\uDF37',  // Mar → 🌷 Spring
+  3:  '\uD83C\uDF37',  // Apr → 🌷 Spring
+  5:  '\uD83D\uDE0E',  // Jun → 😎 Summer
+  6:  '\uD83D\uDE0E',  // Jul → 😎 Summer
+  7:  '\uD83D\uDE0E',  // Aug → 😎 Summer
+};
+
+function getBreakEmoji(date) {
+  return BREAK_EMOJI[date.getMonth()] || '\uD83D\uDE0E'; // default 😎
+}
+
+function renderOffday(nowState, date) {
+  // Hide school-day content
+  els.nowHeader.hidden = true;
+  els.blocksList.hidden = true;
+  els.blocksList.innerHTML = '';
+  blockElements = [];
+  els.nowEmpty.hidden = true;
+  els.personalizeSection.hidden = true;
+
+  // Show offday section
+  els.nowOffday.hidden = false;
+
+  // Track whether we have content below the warm message
+  let hasContentBelow = false;
+
+  if (nowState.override === 'TRANSITION') {
+    // TRANSITION: tomorrow preview is tier1, base warm message demotes to tier2
+    const copy = STATE_COPY.TRANSITION;
+    const baseCopy = STATE_COPY[nowState.base];
+    els.offdayEmoji.textContent = copy.emoji;
+    els.offdayMessage.textContent = copy.message;
+
+    renderNextSchoolPreview(nowState.nextSchoolDay, false);
+
+    els.offdayDemoted.textContent = baseCopy.message;
+    els.offdayDemoted.hidden = false;
+    hasContentBelow = true;
+  } else {
+    // Base state warm message
+    const copy = STATE_COPY[nowState.base];
+    const emoji = nowState.base === 'BREAK' ? getBreakEmoji(date) : copy.emoji;
+
+    els.offdayEmoji.textContent = emoji;
+    els.offdayMessage.textContent = copy.message;
+
+    // Tomorrow preview at tier3 — SINGLE_HOLIDAY only (per spec).
+    // WEEKEND and BREAK don't show it; TRANSITION promotes it to tier1 above.
+    if (nowState.base === 'SINGLE_HOLIDAY' && nowState.nextSchoolDay) {
+      renderNextSchoolPreview(nowState.nextSchoolDay, true);
+      hasContentBelow = true;
+    } else {
+      els.offdayPreview.hidden = true;
+    }
+
+    els.offdayDemoted.hidden = true;
+  }
+
+  // Vertical centering for minimal states (emoji + message only)
+  els.nowOffday.classList.toggle('now-offday--minimal', !hasContentBelow);
+}
+
+function renderNextSchoolPreview(nextSchool, muted) {
+  const preview = els.offdayPreview;
+  preview.hidden = false;
+  preview.classList.toggle('now-offday__preview--muted', muted);
+
+  // Block numbers from raw summary — own line, no parentheses
+  let blockLine = '';
+  if (nextSchool.summary) {
+    const blockMatch = nextSchool.summary.match(/B\.\s*([\d,\s]+)$/);
+    if (blockMatch) blockLine = `Blocks ${blockMatch[1].trim()}`;
+  }
+
+  let html = `<div class="now-offday__preview-label">Next up</div>`;
+  html += `<div class="now-offday__preview-day">${nextSchool.dayLabel}</div>`;
+  if (blockLine) {
+    html += `<div class="now-offday__preview-blocks">${blockLine}</div>`;
+  }
+
+  if (nextSchool.spiritDress && nextSchool.spiritDress.length > 0) {
+    html += `<div class="now-offday__preview-spirit">\uD83D\uDC55 Spirit Dress: ${nextSchool.spiritDress.join(', ')}</div>`;
+  }
+
+  preview.innerHTML = html;
+}
+
+function showSchoolDay() {
+  // Restore school-day content visibility
+  els.nowHeader.hidden = false;
+  els.blocksList.hidden = false;
+  els.nowOffday.hidden = true;
 }
 
 // ---------------------------------------------------------------------------
@@ -235,6 +347,10 @@ function renderBlocks(template, personal, activeBlocks) {
       metaDiv.textContent = parts.join(' \u00B7 ');
       infoDiv.appendChild(nameDiv);
       infoDiv.appendChild(metaDiv);
+    } else if (/check with your teacher/i.test(block.block_name)) {
+      // Fallback template — link to official calendar instead
+      nameDiv.innerHTML = 'Special Schedule \u2014 see <a href="https://materdei.org" target="_blank" rel="noopener">materdei.org</a> for details';
+      infoDiv.appendChild(nameDiv);
     } else {
       // Default: block name only
       nameDiv.textContent = block.block_name;
@@ -265,8 +381,17 @@ function renderBlocks(template, personal, activeBlocks) {
 function tickTemporal(now) {
   if (!currentResolved) return;
 
-  // Day-off or no template — static display, no tick updates needed
-  if (currentResolved.isDayOff || !currentResolved.template) {
+  // Auto-detect TRANSITION at 5pm on non-school days
+  if (!transitionChecked && currentNowState && currentNowState.base !== 'SCHOOL_DAY'
+      && !currentNowState.override && now.getHours() >= 17) {
+    transitionChecked = true;
+    renderStable(now);
+    return;
+  }
+
+  // Non-school-day or no template — static display, no tick updates needed
+  if (currentNowState && currentNowState.base !== 'SCHOOL_DAY') return;
+  if (!currentResolved.template) {
     els.countdownText.textContent = '';
     els.countdownText.classList.remove('now-header__countdown--active');
     return;
@@ -316,24 +441,27 @@ function tickTemporal(now) {
 
 let currentPayload = null;
 let currentResolved = null;
+let currentNowState = null;
 let currentActiveBlocks = null;
+let transitionChecked = false;
 
 function renderStable(now) {
   els.headerDate.textContent = DATE_FMT.format(now);
   currentResolved = resolveDay(currentPayload, now);
+  currentNowState = resolveNowState(currentPayload, now);
+  transitionChecked = false;
 
-  renderValidity(currentResolved, currentPayload);
+  renderValidity(currentResolved, currentPayload, currentNowState);
   renderDeviation(currentResolved);
 
-  // Day-off state
-  if (currentResolved.isDayOff) {
-    els.dayLabel.textContent = currentResolved.dayOffLabel || 'No school today';
-    els.blocksList.innerHTML = '';
-    blockElements = [];
-    showEmpty('No school today.');
-    els.personalizeSection.hidden = true;
+  // Non-school-day states: warm message + optional tomorrow preview
+  if (currentNowState.base !== 'SCHOOL_DAY') {
+    renderOffday(currentNowState, now);
     return;
   }
+
+  // SCHOOL_DAY — restore school-day content, hide offday
+  showSchoolDay();
 
   // Offline / no template
   if (!currentResolved.template) {
@@ -343,6 +471,9 @@ function renderStable(now) {
     blockElements = [];
     if (currentResolved.trustState === 'offline') {
       showEmpty('Schedule unavailable. Check the official site at materdei.org');
+    } else if (currentResolved.isDayOff) {
+      els.dayLabel.textContent = currentResolved.dayOffLabel || 'No school today';
+      showEmpty('No school today.');
     } else {
       showEmpty('No schedule on file for today.');
     }
@@ -353,16 +484,18 @@ function renderStable(now) {
   // Normal schedule
   els.nowEmpty.hidden = true;
 
-  // Build enhanced day label
+  // Day label — blocks on separate line, no parentheses
   const rawSummary = currentResolved.unmatchedSummary || findScheduleSummary();
-  const label = enhanceDayLabel(
-    currentResolved.dayLabel || '',
-    rawSummary
-  );
-  els.dayLabel.textContent = label;
+  els.dayLabel.textContent = currentResolved.dayLabel || '';
+  currentActiveBlocks = extractActiveBlocks(rawSummary);
+  if (currentActiveBlocks && els.dayBlocks) {
+    els.dayBlocks.textContent = `Blocks ${currentActiveBlocks.join(', ')}`;
+    els.dayBlocks.hidden = false;
+  } else if (els.dayBlocks) {
+    els.dayBlocks.hidden = true;
+  }
 
   const personal = loadPersonalSchedule();
-  currentActiveBlocks = extractActiveBlocks(rawSummary);
   renderBlocks(currentResolved.template, personal, currentActiveBlocks);
   els.personalizeSection.hidden = false;
 }
@@ -550,15 +683,42 @@ function renderStreak() {
 }
 
 // ---------------------------------------------------------------------------
+// Dev: ?now= override for visual testing
+// ---------------------------------------------------------------------------
+//
+// Usage: ?now=2025-12-29T09:00  (ISO-like, parsed as local time)
+// Pins the resolver to a fake date. The countdown tick still advances in
+// real time from the pinned moment. Remove before wider launch or gate
+// behind a flag.
+
+const DEV_NOW_PARAM = new URLSearchParams(window.location.search).get('now');
+let devBaseTime = null;
+let devBaseReal = null;
+
+if (DEV_NOW_PARAM) {
+  devBaseTime = new Date(DEV_NOW_PARAM).getTime();
+  devBaseReal = Date.now();
+  console.info(`[dev] time pinned to ${new Date(devBaseTime).toLocaleString()}`);
+}
+
+function getNow() {
+  if (devBaseTime != null) {
+    // Advance from the pinned moment at real-time speed
+    return new Date(devBaseTime + (Date.now() - devBaseReal));
+  }
+  return new Date();
+}
+
+// ---------------------------------------------------------------------------
 // Boot
 // ---------------------------------------------------------------------------
 
 async function boot() {
   currentPayload = await loadData();
-  const now = new Date();
+  const now = getNow();
   renderStable(now);
   tickTemporal(now);
-  startCountdown(tickTemporal, onLongResume);
+  startCountdown((tick) => tickTemporal(getNow()), onLongResume);
   initEditPanel();
   recordVisit();
   renderStreak();
@@ -566,10 +726,10 @@ async function boot() {
 
 async function onLongResume() {
   currentPayload = await loadData();
-  const now = new Date();
+  const now = getNow();
   renderStable(now);
   tickTemporal(now);
-  startCountdown(tickTemporal, onLongResume);
+  startCountdown((tick) => tickTemporal(getNow()), onLongResume);
 }
 
 boot();

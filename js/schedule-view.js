@@ -95,7 +95,8 @@ function renderValidity(resolved, payload) {
       el.classList.add('is-visible', 'is-assumed');
       els.validityIcon.textContent = '?';
       els.validityTitle.textContent = 'Schedule assumed';
-      els.validityDetail.textContent = 'No matching event for today — confirm with your teacher.';
+      els.validityDetail.innerHTML =
+        'No matching event for today \u2014 check <a href="https://materdei.org" target="_blank" rel="noopener">materdei.org</a> for details.';
       return;
 
     case 'offline':
@@ -129,7 +130,7 @@ function renderSchedule(resolved) {
   // --- Assumed state: no template, explain why ---
   if (!resolved.template) {
     els.dayLabel.textContent = resolved.dayLabel || '';
-    showEmpty('No schedule on file for today. Confirm with your teacher.');
+    showEmpty('No schedule on file for today. Check <a href="https://materdei.org" target="_blank" rel="noopener">materdei.org</a> for details.');
     return;
   }
 
@@ -159,7 +160,11 @@ function renderTable(blocks) {
 
     const blockCell = document.createElement('td');
     blockCell.className = 'schedule-table__block';
-    blockCell.textContent = block.block_name;
+    if (/check with your teacher/i.test(block.block_name)) {
+      blockCell.innerHTML = 'Special Schedule \u2014 see <a href="https://materdei.org" target="_blank" rel="noopener">materdei.org</a> for details';
+    } else {
+      blockCell.textContent = block.block_name;
+    }
 
     const trackCell = document.createElement('td');
     trackCell.className = 'schedule-table__track';

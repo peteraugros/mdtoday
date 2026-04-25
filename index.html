@@ -63,16 +63,25 @@
       <!-- Day label + countdown -->
       <section class="now-header" id="now-header">
         <div class="now-header__label" id="day-label">Loading&hellip;</div>
+        <div class="now-header__blocks" id="day-blocks" hidden></div>
         <div class="now-header__countdown" id="countdown-text"></div>
       </section>
 
       <!-- Full day's schedule blocks -->
       <ul class="now-blocks" id="blocks-list"></ul>
 
-      <!-- Empty state (day off, offline, no schedule) -->
+      <!-- Empty state (offline, no schedule) -->
       <div class="now-empty" id="now-empty" hidden>
         <div class="now-empty__text" id="now-empty-text"></div>
       </div>
+
+      <!-- Off-day state (WEEKEND / BREAK / SINGLE_HOLIDAY / TRANSITION) -->
+      <section class="now-offday" id="now-offday" hidden>
+        <div class="now-offday__emoji" id="offday-emoji"></div>
+        <div class="now-offday__message" id="offday-message"></div>
+        <div class="now-offday__preview" id="offday-preview" hidden></div>
+        <div class="now-offday__demoted" id="offday-demoted" hidden></div>
+      </section>
 
       <!-- Streak — personal reflection -->
       <div class="now-streak" id="streak" style="display:none"></div>

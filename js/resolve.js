@@ -185,7 +185,7 @@ function buildDayLabel(summary, isMondaySubstitution) {
   const qualifier = qualifierMatch ? qualifierMatch[1].replace(/\s+Schedule$/i, '').trim() : null;
 
   if (isMondaySubstitution && color) {
-    return `Monday ${color}`;
+    return `Homeroom Day \u2014 ${color} Day`;
   }
   if (color && qualifier) {
     return `${color} Day — ${qualifier}`;
@@ -371,11 +371,7 @@ export function resolveDay(data, date = new Date()) {
 export function getSpiritDressEvents(data, date) {
   if (!data || !data.events) return [];
 
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, '0');
-  const d = String(date.getDate()).padStart(2, '0');
-  const dateStr = `${y}-${m}-${d}`;
-
+  const dateStr = toLocalDateString(date);
   const themes = [];
   for (const event of data.events) {
     if (event.date !== dateStr) continue;
@@ -384,4 +380,158 @@ export function getSpiritDressEvents(data, date) {
     }
   }
   return themes;
+}
+
+// ---------------------------------------------------------------------------
+// Now-state resolver — base state + override (see state_spec.md)
+// ---------------------------------------------------------------------------
+//
+// Base states: SCHOOL_DAY, WEEKEND, BREAK, SINGLE_HOLIDAY
+// Overrides:   TRANSITION (LIVE_EVENT deferred to v2)
+//
+// Break detection: a non-school stretch with ≥2 weekday day-offs is a BREAK.
+// This correctly classifies Thanksgiving (Thu+Fri off), Christmas (multi-week),
+// and weekend days sandwiched between holidays, while keeping normal weekends
+// and single-day holidays distinct.
+
+/**
+ * Determine the base calendar state for a date.
+ */
+function getBaseState(data, date) {
+  const resolved = resolveDay(data, date);
+  const dow = date.getDay();
+  const isWeekendDay = dow === 0 || dow === 6;
+
+  // Has a schedule event → SCHOOL_DAY
+  if (resolved.template) return 'SCHOOL_DAY';
+
+  // Day-off event exists
+  if (resolved.isDayOff) {
+    return isPartOfBreak(data, date) ? 'BREAK' : 'SINGLE_HOLIDAY';
+  }
+
+  // Weekend with no events
+  if (isWeekendDay) {
+    return isPartOfBreak(data, date) ? 'BREAK' : 'WEEKEND';
+  }
+
+  // Weekday, no schedule event, no day-off event → SCHOOL_DAY (assumed state)
+  return 'SCHOOL_DAY';
+}
+
+/**
+ * Check if a date is part of a multi-day non-school stretch.
+ *
+ * Walks backward and forward from the date, collecting contiguous non-school
+ * days (weekends + weekday day-offs). If the stretch contains ≥2 weekday
+ * day-offs, everything in the stretch is BREAK.
+ *
+ * This means:
+ * - Fri-off + Sat + Sun + Mon-off → BREAK (sandwiched, 2 weekday day-offs)
+ * - Single Tuesday off → SINGLE_HOLIDAY (1 weekday day-off)
+ * - Normal Sat + Sun → WEEKEND (0 weekday day-offs)
+ * - Thanksgiving Thu+Fri → BREAK (2 weekday day-offs), Sat+Sun also BREAK
+ */
+function isPartOfBreak(data, date) {
+  const events = data.events || [];
+
+  function isNonSchoolDate(d) {
+    const dow = d.getDay();
+    if (dow === 0 || dow === 6) return true;
+    const ds = toLocalDateString(d);
+    return events.some(e => e.date === ds && isDayOffSummary(e.summary));
+  }
+
+  function isWeekdayDayOff(d) {
+    const dow = d.getDay();
+    if (dow === 0 || dow === 6) return false;
+    const ds = toLocalDateString(d);
+    return events.some(e => e.date === ds && isDayOffSummary(e.summary));
+  }
+
+  let weekdayDayOffs = 0;
+  if (isWeekdayDayOff(date)) weekdayDayOffs++;
+
+  // Walk backward (cap at 60 days for safety — summer break)
+  const back = new Date(date);
+  for (let i = 0; i < 60; i++) {
+    back.setDate(back.getDate() - 1);
+    if (!isNonSchoolDate(back)) break;
+    if (isWeekdayDayOff(back)) weekdayDayOffs++;
+  }
+
+  // Walk forward
+  const fwd = new Date(date);
+  for (let i = 0; i < 60; i++) {
+    fwd.setDate(fwd.getDate() + 1);
+    if (!isNonSchoolDate(fwd)) break;
+    if (isWeekdayDayOff(fwd)) weekdayDayOffs++;
+  }
+
+  return weekdayDayOffs >= 2;
+}
+
+/**
+ * Find the next school day after the given date.
+ * Returns null if none found within 30 days.
+ */
+function getNextSchoolDay(data, date) {
+  const summaryMap = data.summaryMap || [];
+  const summaryToTemplate = new Map(
+    summaryMap.map(row => [row.calendar_summary, row.template_id])
+  );
+
+  const cursor = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  for (let i = 0; i < 30; i++) {
+    cursor.setDate(cursor.getDate() + 1);
+    const dateStr = toLocalDateString(cursor);
+
+    const scheduleEvent = (data.events || []).find(
+      e => e.date === dateStr && summaryToTemplate.has(e.summary)
+    );
+
+    if (scheduleEvent) {
+      const futureDate = new Date(cursor);
+      const resolved = resolveDay(data, futureDate);
+      const spiritDress = getSpiritDressEvents(data, futureDate);
+      return {
+        date: futureDate,
+        dateStr,
+        dayLabel: resolved.dayLabel,
+        summary: scheduleEvent.summary,
+        spiritDress,
+      };
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Resolve the Now view's display state.
+ *
+ * Returns { base, override, nextSchoolDay } where:
+ *   base:          'SCHOOL_DAY' | 'WEEKEND' | 'BREAK' | 'SINGLE_HOLIDAY'
+ *   override:      'TRANSITION' | null
+ *   nextSchoolDay: { date, dateStr, dayLabel, summary, spiritDress } | null
+ */
+export function resolveNowState(data, date = new Date()) {
+  if (!data || data.source === 'none') {
+    return { base: 'SCHOOL_DAY', override: null, nextSchoolDay: null };
+  }
+
+  const base = getBaseState(data, date);
+  const nextSchool = (base !== 'SCHOOL_DAY') ? getNextSchoolDay(data, date) : null;
+
+  // TRANSITION: fires at 5pm+ when next school day is within 18 hours
+  if (base !== 'SCHOOL_DAY' && nextSchool && date.getHours() >= 17) {
+    const nextMidnight = new Date(nextSchool.date);
+    nextMidnight.setHours(0, 0, 0, 0);
+    const hoursUntil = (nextMidnight.getTime() - date.getTime()) / (1000 * 60 * 60);
+    if (hoursUntil > 0 && hoursUntil <= 18) {
+      return { base, override: 'TRANSITION', nextSchoolDay: nextSchool };
+    }
+  }
+
+  return { base, override: null, nextSchoolDay: nextSchool };
 }
