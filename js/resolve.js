@@ -507,13 +507,131 @@ function getNextSchoolDay(data, date) {
   return null;
 }
 
+
+/**
+ * Get the final bell time (end of last block) for a date, in minutes since midnight.
+ * Returns null if no template or no blocks.
+ */
+function getFinalBellMinutes(data, date) {
+  const resolved = resolveDay(data, date);
+  if (!resolved.template || !resolved.template.blocks || resolved.template.blocks.length === 0) {
+    return null;
+  }
+  let max = 0;
+  for (const block of resolved.template.blocks) {
+    const [h, m] = block.end_time.split(':').map(Number);
+    const mins = h * 60 + m;
+    if (mins > max) max = mins;
+  }
+  return max;
+}
+
+// ---------------------------------------------------------------------------
+// Marquee event detection — Friday evening Tier A sports
+// ---------------------------------------------------------------------------
+
+const MARQUEE_SPORTS = new Map([
+  ['football',   '\uD83C\uDFC8'],  // 🏈
+  ['baseball',   '\u26BE'],         // ⚾
+  ['softball',   '\uD83E\uDD4E'],  // 🥎
+  ['basketball', '\uD83C\uDFC0'],  // 🏀
+  ['soccer',     '\u26BD'],         // ⚽
+  ['lacrosse',   '\uD83E\uDD4D'],  // 🥍
+]);
+
+/**
+ * Parse a varsity Big Five sports event from a raw SUMMARY.
+ * Returns { emoji, sport, sportKey, opponent, home } or null.
+ */
+function parseMarqueeEvent(summary) {
+  if (!summary || !/^V\s/i.test(summary)) return null; // Varsity only
+
+  let rest = summary.replace(/^V\s+/i, '');
+
+  // Extract opponent and home/away
+  let teamPart, opponent = '', home = false;
+  const awayMatch = rest.match(/^(.+?)\s+@\s+(.+)$/);
+  const homeMatch = rest.match(/^(.+?)\s+vs\.?\s+(.+)$/i);
+
+  if (awayMatch) {
+    teamPart = awayMatch[1].trim();
+    opponent = awayMatch[2].trim();
+  } else if (homeMatch) {
+    teamPart = homeMatch[1].trim();
+    opponent = homeMatch[2].trim();
+    home = true;
+  } else {
+    teamPart = rest;
+  }
+
+  // Strip gender prefix to get sport key
+  const sportKey = teamPart.replace(/^(Boys|Girls)\s+/i, '').toLowerCase();
+  const emoji = MARQUEE_SPORTS.get(sportKey);
+  if (!emoji) return null;
+
+  return { emoji, sport: teamPart, sportKey, opponent, home };
+}
+
+/**
+ * Find marquee (Big Five varsity) sports events for a given date.
+ * Sorted by start time descending — latest = primary (index 0).
+ */
+function getMarqueeEvents(data, date) {
+  const dateStr = toLocalDateString(date);
+  const marquee = [];
+
+  for (const event of (data.events || [])) {
+    if (event.date !== dateStr) continue;
+    const info = parseMarqueeEvent(event.summary);
+    if (!info) continue;
+    marquee.push({ ...info, time: event.time || null, raw: event.summary });
+  }
+
+  // Latest start time = primary (index 0)
+  marquee.sort((a, b) => {
+    const timeA = a.time ? parseInt(a.time.replace(':', ''), 10) : 0;
+    const timeB = b.time ? parseInt(b.time.replace(':', ''), 10) : 0;
+    return timeB - timeA;
+  });
+
+  return marquee;
+}
+
+/**
+ * Check if the next school day is within a given number of hours from now.
+ */
+function isNextSchoolWithinHours(nextSchool, date, hours) {
+  const nextMidnight = new Date(nextSchool.date);
+  nextMidnight.setHours(0, 0, 0, 0);
+  const hoursUntil = (nextMidnight.getTime() - date.getTime()) / (1000 * 60 * 60);
+  return hoursUntil > 0 && hoursUntil <= hours;
+}
+
 /**
  * Resolve the Now view's display state.
  *
- * Returns { base, override, nextSchoolDay } where:
+ * Returns { base, override, nextSchoolDay, marqueeEvents? } where:
  *   base:          'SCHOOL_DAY' | 'WEEKEND' | 'BREAK' | 'SINGLE_HOLIDAY'
- *   override:      'TRANSITION' | null
+ *   override:      'TRANSITION' | 'POST_SCHOOL' | 'MARQUEE_NIGHT' | null
  *   nextSchoolDay: { date, dateStr, dayLabel, summary, spiritDress } | null
+ *   marqueeEvents: Array (only present on Friday WEEKEND)
+ *
+ * Triggers:
+ *   Trigger 1 (non-school-day evenings):
+ *     base ∈ {WEEKEND, BREAK, SINGLE_HOLIDAY} AND hour >= 17
+ *     AND nextSchoolDay within 18h → TRANSITION
+ *
+ *   Trigger 2 (weeknight Mon-Thu, 5pm+):
+ *     base == SCHOOL_DAY AND hour >= 17 AND not Friday
+ *     AND nextSchoolDay within 18h → TRANSITION
+ *
+ *   Friday evening (after final bell):
+ *     base == SCHOOL_DAY AND Friday AND now >= finalBell
+ *     → WEEKEND base, MARQUEE_NIGHT if Big Five sports tonight
+ *
+ * POST_SCHOOL:
+ *   base == SCHOOL_DAY AND hour >= 17 AND not Friday
+ *   AND (no nextSchoolDay OR nextSchoolDay > 18h)
  */
 export function resolveNowState(data, date = new Date()) {
   if (!data || data.source === 'none') {
@@ -521,16 +639,46 @@ export function resolveNowState(data, date = new Date()) {
   }
 
   const base = getBaseState(data, date);
-  const nextSchool = (base !== 'SCHOOL_DAY') ? getNextSchoolDay(data, date) : null;
 
-  // TRANSITION: fires at 5pm+ when next school day is within 18 hours
-  if (base !== 'SCHOOL_DAY' && nextSchool && date.getHours() >= 17) {
-    const nextMidnight = new Date(nextSchool.date);
-    nextMidnight.setHours(0, 0, 0, 0);
-    const hoursUntil = (nextMidnight.getTime() - date.getTime()) / (1000 * 60 * 60);
-    if (hoursUntil > 0 && hoursUntil <= 18) {
-      return { base, override: 'TRANSITION', nextSchoolDay: nextSchool };
+  // --- SCHOOL_DAY evening checks ---
+  if (base === 'SCHOOL_DAY') {
+    const dow = date.getDay();
+    const isFriday = dow === 5;
+    const nowMinutes = date.getHours() * 60 + date.getMinutes();
+
+    // Friday after final bell → WEEKEND immediately (no 5pm wait)
+    if (isFriday) {
+      const finalBell = getFinalBellMinutes(data, date);
+      if (finalBell && nowMinutes >= finalBell) {
+        const nextSchool = getNextSchoolDay(data, date);
+        const marqueeEvents = getMarqueeEvents(data, date);
+        return {
+          base: 'WEEKEND',
+          override: marqueeEvents.length > 0 ? 'MARQUEE_NIGHT' : null,
+          nextSchoolDay: nextSchool,
+          marqueeEvents,
+        };
+      }
+      return { base, override: null, nextSchoolDay: null };
     }
+
+    // Mon-Thu after 5pm → TRANSITION / POST_SCHOOL
+    if (date.getHours() >= 17) {
+      const nextSchool = getNextSchoolDay(data, date);
+      if (nextSchool && isNextSchoolWithinHours(nextSchool, date, 18)) {
+        return { base, override: 'TRANSITION', nextSchoolDay: nextSchool };
+      }
+      return { base, override: 'POST_SCHOOL', nextSchoolDay: null };
+    }
+
+    return { base, override: null, nextSchoolDay: null };
+  }
+
+  // --- Non-school-day: check for evening TRANSITION (Trigger 1) ---
+  const nextSchool = getNextSchoolDay(data, date);
+
+  if (nextSchool && date.getHours() >= 17 && isNextSchoolWithinHours(nextSchool, date, 18)) {
+    return { base, override: 'TRANSITION', nextSchoolDay: nextSchool };
   }
 
   return { base, override: null, nextSchoolDay: nextSchool };
