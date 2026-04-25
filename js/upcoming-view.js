@@ -7,6 +7,7 @@
 
 import { loadData, isFresh, FRESHNESS_HORIZON_MS } from './data.js';
 import { resolveDay, getSpiritDressEvents } from './resolve.js';
+import { formatBlockLine } from './format.js';
 
 // ---------------------------------------------------------------------------
 // DOM references
@@ -30,6 +31,7 @@ const els = {
   detailSection: $('upcoming-detail'),
   detailBack: $('detail-back'),
   detailDayLabel: $('detail-day-label'),
+  detailDayBlocks: $('detail-day-blocks'),
   detailBlocksList: $('detail-blocks-list'),
   detailEmpty: $('detail-empty'),
   detailEmptyText: $('detail-empty-text'),
@@ -89,15 +91,6 @@ function extractBlockNumber(blockName) {
   return match ? match[1] : null;
 }
 
-function enhanceDayLabel(label, summary) {
-  if (!summary) return label;
-  const blockMatch = summary.match(/B\.\s*([\d,\s]+)$/);
-  if (blockMatch) {
-    const blocks = blockMatch[1].trim();
-    return `${label} (Blocks ${blocks})`;
-  }
-  return label;
-}
 
 // ---------------------------------------------------------------------------
 // Render: validity
@@ -240,9 +233,16 @@ function showDetail(date, resolved) {
   els.listSection.hidden = true;
   els.detailSection.hidden = false;
 
+  // Day label — no date prefix, blocks on separate line
+  els.detailDayLabel.textContent = resolved.dayLabel || '';
   const rawSummary = findScheduleSummary(currentPayload, date);
-  const label = enhanceDayLabel(resolved.dayLabel || '', rawSummary);
-  els.detailDayLabel.textContent = `${DETAIL_DATE_FMT.format(date)} \u2014 ${label}`;
+  const blockLine = formatBlockLine(rawSummary);
+  if (blockLine && els.detailDayBlocks) {
+    els.detailDayBlocks.textContent = blockLine;
+    els.detailDayBlocks.hidden = false;
+  } else if (els.detailDayBlocks) {
+    els.detailDayBlocks.hidden = true;
+  }
 
   if (!resolved.template) {
     els.detailBlocksList.innerHTML = '';
@@ -286,6 +286,9 @@ function renderDetailBlocks(template, personal) {
       metaDiv.textContent = parts.join(' \u00B7 ');
       infoDiv.appendChild(nameDiv);
       infoDiv.appendChild(metaDiv);
+    } else if (/check with your teacher/i.test(block.block_name)) {
+      nameDiv.innerHTML = 'Special Schedule \u2014 see <a href="https://materdei.org" target="_blank" rel="noopener">materdei.org</a> for details';
+      infoDiv.appendChild(nameDiv);
     } else {
       nameDiv.textContent = block.block_name;
       infoDiv.appendChild(nameDiv);
