@@ -32,6 +32,7 @@ const els = {
 
   nowHeader: $('now-header'),
   dayLabel: $('day-label'),
+  dayBlocks: $('day-blocks'),
   countdownText: $('countdown-text'),
 
   blocksList: $('blocks-list'),
@@ -135,19 +136,6 @@ function extractBlockNumber(blockName, activeBlocks) {
   return match ? match[1] : null;
 }
 
-/**
- * Enhance day label with block number reinforcement.
- * "Red Day" + "RED: B. 1, 3, 5, 7" → "Red Day (Blocks 1, 3, 5, 7)"
- */
-function enhanceDayLabel(label, summary) {
-  if (!summary) return label;
-  const blockMatch = summary.match(/B\.\s*([\d,\s]+)$/);
-  if (blockMatch) {
-    const blocks = blockMatch[1].trim();
-    return `${label} (Blocks ${blocks})`;
-  }
-  return label;
-}
 
 // ---------------------------------------------------------------------------
 // Render: validity region
@@ -232,11 +220,10 @@ function getBreakEmoji(date) {
   return BREAK_EMOJI[date.getMonth()] || '\uD83D\uDE0E'; // default 😎
 }
 
-const PREVIEW_DATE_FMT = new Intl.DateTimeFormat('en-US', { weekday: 'long' });
-
 function renderOffday(nowState, date) {
   // Hide school-day content
   els.nowHeader.hidden = true;
+  els.blocksList.hidden = true;
   els.blocksList.innerHTML = '';
   blockElements = [];
   els.nowEmpty.hidden = true;
@@ -289,17 +276,18 @@ function renderNextSchoolPreview(nextSchool, muted) {
   preview.hidden = false;
   preview.classList.toggle('now-offday__preview--muted', muted);
 
-  const dayName = PREVIEW_DATE_FMT.format(nextSchool.date);
-
-  // Block numbers from raw summary
-  let blockInfo = '';
+  // Block numbers from raw summary — own line, no parentheses
+  let blockLine = '';
   if (nextSchool.summary) {
     const blockMatch = nextSchool.summary.match(/B\.\s*([\d,\s]+)$/);
-    if (blockMatch) blockInfo = ` (Blocks ${blockMatch[1].trim()})`;
+    if (blockMatch) blockLine = `Blocks ${blockMatch[1].trim()}`;
   }
 
   let html = `<div class="now-offday__preview-label">Next up</div>`;
-  html += `<div class="now-offday__preview-day">${dayName} \u2014 ${nextSchool.dayLabel}${blockInfo}</div>`;
+  html += `<div class="now-offday__preview-day">${nextSchool.dayLabel}</div>`;
+  if (blockLine) {
+    html += `<div class="now-offday__preview-blocks">${blockLine}</div>`;
+  }
 
   if (nextSchool.spiritDress && nextSchool.spiritDress.length > 0) {
     html += `<div class="now-offday__preview-spirit">\uD83D\uDC55 Spirit Dress: ${nextSchool.spiritDress.join(', ')}</div>`;
@@ -311,6 +299,7 @@ function renderNextSchoolPreview(nextSchool, muted) {
 function showSchoolDay() {
   // Restore school-day content visibility
   els.nowHeader.hidden = false;
+  els.blocksList.hidden = false;
   els.nowOffday.hidden = true;
 }
 
@@ -490,16 +479,18 @@ function renderStable(now) {
   // Normal schedule
   els.nowEmpty.hidden = true;
 
-  // Build enhanced day label
+  // Day label — blocks on separate line, no parentheses
   const rawSummary = currentResolved.unmatchedSummary || findScheduleSummary();
-  const label = enhanceDayLabel(
-    currentResolved.dayLabel || '',
-    rawSummary
-  );
-  els.dayLabel.textContent = label;
+  els.dayLabel.textContent = currentResolved.dayLabel || '';
+  currentActiveBlocks = extractActiveBlocks(rawSummary);
+  if (currentActiveBlocks && els.dayBlocks) {
+    els.dayBlocks.textContent = `Blocks ${currentActiveBlocks.join(', ')}`;
+    els.dayBlocks.hidden = false;
+  } else if (els.dayBlocks) {
+    els.dayBlocks.hidden = true;
+  }
 
   const personal = loadPersonalSchedule();
-  currentActiveBlocks = extractActiveBlocks(rawSummary);
   renderBlocks(currentResolved.template, personal, currentActiveBlocks);
   els.personalizeSection.hidden = false;
 }

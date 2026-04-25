@@ -185,7 +185,7 @@ function buildDayLabel(summary, isMondaySubstitution) {
   const qualifier = qualifierMatch ? qualifierMatch[1].replace(/\s+Schedule$/i, '').trim() : null;
 
   if (isMondaySubstitution && color) {
-    return `Monday ${color}`;
+    return `Homeroom Day \u2014 ${color} Day`;
   }
   if (color && qualifier) {
     return `${color} Day — ${qualifier}`;

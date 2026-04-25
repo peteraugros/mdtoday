@@ -228,6 +228,14 @@
     margin-bottom: var(--spacing-sm);
   }
 
+  .now-header__blocks {
+    font-size: 0.8125rem;
+    color: var(--md-gray-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-bottom: var(--spacing-sm);
+  }
+
   .now-header__countdown {
     font-size: 1.5rem;
     font-weight: 700;
@@ -285,6 +293,12 @@
     font-size: 1rem;
     font-weight: 600;
     color: var(--md-gray-text);
+  }
+
+  .now-offday__preview-blocks {
+    font-size: 0.8125rem;
+    color: var(--md-gray-text-muted);
+    margin-top: 2px;
   }
 
   .now-offday__preview-spirit {
