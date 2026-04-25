@@ -507,23 +507,6 @@ function getNextSchoolDay(data, date) {
   return null;
 }
 
-/**
- * Get the final bell time (end of last block) for a date, in minutes since midnight.
- * Returns null if no template or no blocks.
- */
-function getFinalBellMinutes(data, date) {
-  const resolved = resolveDay(data, date);
-  if (!resolved.template || !resolved.template.blocks || resolved.template.blocks.length === 0) {
-    return null;
-  }
-  let max = 0;
-  for (const block of resolved.template.blocks) {
-    const [h, m] = block.end_time.split(':').map(Number);
-    const mins = h * 60 + m;
-    if (mins > max) max = mins;
-  }
-  return max;
-}
 
 /**
  * Check if the next school day is within a given number of hours from now.
@@ -564,18 +547,18 @@ export function resolveNowState(data, date = new Date()) {
   const base = getBaseState(data, date);
 
   // --- SCHOOL_DAY: check for weeknight TRANSITION (Trigger 2) ---
+  // Fires at 5pm (not final bell) so the "School day complete" view
+  // stays visible during the 3–5pm after-school window.
   if (base === 'SCHOOL_DAY') {
     const dow = date.getDay();
     const isFriday = dow === 5;
-    const finalBell = getFinalBellMinutes(data, date);
-    const nowMinutes = date.getHours() * 60 + date.getMinutes();
 
-    if (finalBell && nowMinutes >= finalBell && !isFriday) {
+    if (date.getHours() >= 17 && !isFriday) {
       const nextSchool = getNextSchoolDay(data, date);
       if (nextSchool && isNextSchoolWithinHours(nextSchool, date, 18)) {
         return { base, override: 'TRANSITION', nextSchoolDay: nextSchool };
       }
-      // After bell but TRANSITION can't fire — suppress stale blocks
+      // Past 5pm but TRANSITION can't fire — suppress stale blocks
       return { base, override: 'POST_SCHOOL', nextSchoolDay: null };
     }
 

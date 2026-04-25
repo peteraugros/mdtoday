@@ -108,15 +108,7 @@ function timeToMinutes(hhmm) {
   return h * 60 + m;
 }
 
-function getLastBlockEndMinutes(template) {
-  if (!template || !template.blocks || template.blocks.length === 0) return null;
-  let max = 0;
-  for (const block of template.blocks) {
-    const mins = timeToMinutes(block.end_time);
-    if (mins > max) max = mins;
-  }
-  return max;
-}
+
 
 
 /**
@@ -393,16 +385,12 @@ function tickTemporal(now) {
     return;
   }
 
-  // Auto-detect TRANSITION / POST_SCHOOL after final bell on school days
+  // Auto-detect TRANSITION / POST_SCHOOL at 5pm on school days
   if (!transitionChecked && currentNowState && currentNowState.base === 'SCHOOL_DAY'
-      && !currentNowState.override && currentResolved.template) {
-    const finalBell = getLastBlockEndMinutes(currentResolved.template);
-    const nowMin = now.getHours() * 60 + now.getMinutes();
-    if (finalBell && nowMin >= finalBell) {
-      transitionChecked = true;
-      renderStable(now);
-      return;
-    }
+      && !currentNowState.override && now.getHours() >= 17) {
+    transitionChecked = true;
+    renderStable(now);
+    return;
   }
 
   // Non-school-day or override active — static display, no tick updates needed
