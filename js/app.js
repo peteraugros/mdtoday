@@ -108,8 +108,15 @@ function timeToMinutes(hhmm) {
   return h * 60 + m;
 }
 
-
-
+function getLastBlockEndMinutes(template) {
+  if (!template || !template.blocks || template.blocks.length === 0) return null;
+  let max = 0;
+  for (const block of template.blocks) {
+    const mins = timeToMinutes(block.end_time);
+    if (mins > max) max = mins;
+  }
+  return max;
+}
 
 /**
  * Extract block number from block_name (e.g., "Block 1" → "1", "Upper Lunch" → null).
@@ -421,12 +428,24 @@ function tickTemporal(now) {
     return;
   }
 
-  // Auto-detect TRANSITION / POST_SCHOOL at 5pm on school days
+  // Auto-detect evening state change on school days:
+  // Friday → at final bell (immediate WEEKEND); Mon-Thu → at 5pm
   if (!transitionChecked && currentNowState && currentNowState.base === 'SCHOOL_DAY'
-      && !currentNowState.override && now.getHours() >= 17) {
-    transitionChecked = true;
-    renderStable(now);
-    return;
+      && !currentNowState.override) {
+    const isFriday = now.getDay() === 5;
+    let shouldTransition = false;
+    if (isFriday && currentResolved.template) {
+      const finalBell = getLastBlockEndMinutes(currentResolved.template);
+      const nowMin = now.getHours() * 60 + now.getMinutes();
+      shouldTransition = finalBell && nowMin >= finalBell;
+    } else {
+      shouldTransition = now.getHours() >= 17;
+    }
+    if (shouldTransition) {
+      transitionChecked = true;
+      renderStable(now);
+      return;
+    }
   }
 
   // Non-school-day or override active — static display, no tick updates needed

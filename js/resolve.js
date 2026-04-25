@@ -508,6 +508,24 @@ function getNextSchoolDay(data, date) {
 }
 
 
+/**
+ * Get the final bell time (end of last block) for a date, in minutes since midnight.
+ * Returns null if no template or no blocks.
+ */
+function getFinalBellMinutes(data, date) {
+  const resolved = resolveDay(data, date);
+  if (!resolved.template || !resolved.template.blocks || resolved.template.blocks.length === 0) {
+    return null;
+  }
+  let max = 0;
+  for (const block of resolved.template.blocks) {
+    const [h, m] = block.end_time.split(':').map(Number);
+    const mins = h * 60 + m;
+    if (mins > max) max = mins;
+  }
+  return max;
+}
+
 // ---------------------------------------------------------------------------
 // Marquee event detection — Friday evening Tier A sports
 // ---------------------------------------------------------------------------
@@ -607,8 +625,8 @@ function isNextSchoolWithinHours(nextSchool, date, hours) {
  *     base == SCHOOL_DAY AND hour >= 17 AND not Friday
  *     AND nextSchoolDay within 18h → TRANSITION
  *
- *   Friday evening (5pm+):
- *     base == SCHOOL_DAY AND Friday AND hour >= 17
+ *   Friday evening (after final bell):
+ *     base == SCHOOL_DAY AND Friday AND now >= finalBell
  *     → WEEKEND base, MARQUEE_NIGHT if Big Five sports tonight
  *
  * POST_SCHOOL:
@@ -623,31 +641,36 @@ export function resolveNowState(data, date = new Date()) {
   const base = getBaseState(data, date);
 
   // --- SCHOOL_DAY evening checks ---
-  if (base === 'SCHOOL_DAY' && date.getHours() >= 17) {
+  if (base === 'SCHOOL_DAY') {
     const dow = date.getDay();
     const isFriday = dow === 5;
+    const nowMinutes = date.getHours() * 60 + date.getMinutes();
 
-    // Friday after 5pm → WEEKEND with optional marquee framing
+    // Friday after final bell → WEEKEND immediately (no 5pm wait)
     if (isFriday) {
-      const nextSchool = getNextSchoolDay(data, date);
-      const marqueeEvents = getMarqueeEvents(data, date);
-      return {
-        base: 'WEEKEND',
-        override: marqueeEvents.length > 0 ? 'MARQUEE_NIGHT' : null,
-        nextSchoolDay: nextSchool,
-        marqueeEvents,
-      };
+      const finalBell = getFinalBellMinutes(data, date);
+      if (finalBell && nowMinutes >= finalBell) {
+        const nextSchool = getNextSchoolDay(data, date);
+        const marqueeEvents = getMarqueeEvents(data, date);
+        return {
+          base: 'WEEKEND',
+          override: marqueeEvents.length > 0 ? 'MARQUEE_NIGHT' : null,
+          nextSchoolDay: nextSchool,
+          marqueeEvents,
+        };
+      }
+      return { base, override: null, nextSchoolDay: null };
     }
 
     // Mon-Thu after 5pm → TRANSITION / POST_SCHOOL
-    const nextSchool = getNextSchoolDay(data, date);
-    if (nextSchool && isNextSchoolWithinHours(nextSchool, date, 18)) {
-      return { base, override: 'TRANSITION', nextSchoolDay: nextSchool };
+    if (date.getHours() >= 17) {
+      const nextSchool = getNextSchoolDay(data, date);
+      if (nextSchool && isNextSchoolWithinHours(nextSchool, date, 18)) {
+        return { base, override: 'TRANSITION', nextSchoolDay: nextSchool };
+      }
+      return { base, override: 'POST_SCHOOL', nextSchoolDay: null };
     }
-    return { base, override: 'POST_SCHOOL', nextSchoolDay: null };
-  }
 
-  if (base === 'SCHOOL_DAY') {
     return { base, override: null, nextSchoolDay: null };
   }
 
