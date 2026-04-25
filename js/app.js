@@ -210,14 +210,31 @@ function renderDeviation(resolved) {
 
 const STATE_COPY = {
   WEEKEND:        { emoji: '\uD83C\uDF24\uFE0F', message: 'Enjoy your weekend.' },
-  BREAK:          { emoji: '\uD83C\uDF34',       message: 'Enjoy your break.' },
+  BREAK:          { emoji: '\uD83D\uDE0E',       message: 'Enjoy your break.' },
   SINGLE_HOLIDAY: { emoji: '\u2600\uFE0F',       message: 'Enjoy the day off.' },
   TRANSITION:     { emoji: '\uD83C\uDF19',       message: 'Getting ready for tomorrow' },
 };
 
+// Seasonal emoji for BREAK — derived from month, not break name.
+// Emoji lives in render config, not state logic (per spec).
+const BREAK_EMOJI = {
+  10: '\uD83E\uDD83',  // Nov (0-indexed: 10) → 🦃 Thanksgiving
+  11: '\uD83C\uDF84',  // Dec → 🎄 Christmas/Winter
+  0:  '\uD83C\uDF84',  // Jan → 🎄 Winter break carry-over
+  2:  '\uD83C\uDF37',  // Mar → 🌷 Spring
+  3:  '\uD83C\uDF37',  // Apr → 🌷 Spring
+  5:  '\uD83D\uDE0E',  // Jun → 😎 Summer
+  6:  '\uD83D\uDE0E',  // Jul → 😎 Summer
+  7:  '\uD83D\uDE0E',  // Aug → 😎 Summer
+};
+
+function getBreakEmoji(date) {
+  return BREAK_EMOJI[date.getMonth()] || '\uD83D\uDE0E'; // default 😎
+}
+
 const PREVIEW_DATE_FMT = new Intl.DateTimeFormat('en-US', { weekday: 'long' });
 
-function renderOffday(nowState) {
+function renderOffday(nowState, date) {
   // Hide school-day content
   els.nowHeader.hidden = true;
   els.blocksList.innerHTML = '';
@@ -228,11 +245,13 @@ function renderOffday(nowState) {
   // Show offday section
   els.nowOffday.hidden = false;
 
+  // Track whether we have content below the warm message
+  let hasContentBelow = false;
+
   if (nowState.override === 'TRANSITION') {
     // TRANSITION: tomorrow preview is tier1, base warm message demotes to tier2
     const copy = STATE_COPY.TRANSITION;
     const baseCopy = STATE_COPY[nowState.base];
-
     els.offdayEmoji.textContent = copy.emoji;
     els.offdayMessage.textContent = copy.message;
 
@@ -240,23 +259,29 @@ function renderOffday(nowState) {
 
     els.offdayDemoted.textContent = baseCopy.message;
     els.offdayDemoted.hidden = false;
+    hasContentBelow = true;
   } else {
     // Base state warm message
     const copy = STATE_COPY[nowState.base];
+    const emoji = nowState.base === 'BREAK' ? getBreakEmoji(date) : copy.emoji;
 
-    els.offdayEmoji.textContent = copy.emoji;
+    els.offdayEmoji.textContent = emoji;
     els.offdayMessage.textContent = copy.message;
 
     // Tomorrow preview at tier3 — SINGLE_HOLIDAY only (per spec).
     // WEEKEND and BREAK don't show it; TRANSITION promotes it to tier1 above.
     if (nowState.base === 'SINGLE_HOLIDAY' && nowState.nextSchoolDay) {
       renderNextSchoolPreview(nowState.nextSchoolDay, true);
+      hasContentBelow = true;
     } else {
       els.offdayPreview.hidden = true;
     }
 
     els.offdayDemoted.hidden = true;
   }
+
+  // Vertical centering for minimal states (emoji + message only)
+  els.nowOffday.classList.toggle('now-offday--minimal', !hasContentBelow);
 }
 
 function renderNextSchoolPreview(nextSchool, muted) {
@@ -437,7 +462,7 @@ function renderStable(now) {
 
   // Non-school-day states: warm message + optional tomorrow preview
   if (currentNowState.base !== 'SCHOOL_DAY') {
-    renderOffday(currentNowState);
+    renderOffday(currentNowState, now);
     return;
   }
 

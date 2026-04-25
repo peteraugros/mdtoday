@@ -304,6 +304,17 @@
     font-style: italic;
   }
 
+  /* Minimal state: emoji + message only, no content below.
+     Center vertically in remaining viewport. */
+  .now-offday--minimal {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 50vh;
+    padding-top: 0;
+  }
+
   /* --- Block list --- */
 
   .now-blocks {
