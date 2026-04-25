@@ -242,8 +242,19 @@ function renderOffday(nowState, date) {
     els.offdayDemoted.textContent = baseCopy.message;
     els.offdayDemoted.hidden = false;
     hasContentBelow = true;
+  } else if (nowState.override === 'MARQUEE_NIGHT') {
+    // Friday evening marquee — Big Five varsity sports
+    const primary = nowState.marqueeEvents[0];
+    els.offdayEmoji.textContent = primary.emoji;
+    els.offdayMessage.textContent = 'Tonight at Mater Dei';
+
+    renderMarqueePreview(nowState.marqueeEvents);
+
+    els.offdayDemoted.textContent = 'Enjoy your weekend.';
+    els.offdayDemoted.hidden = false;
+    hasContentBelow = true;
   } else if (nowState.override === 'POST_SCHOOL') {
-    // POST_SCHOOL: after final bell, TRANSITION can't fire (next school >18h or Friday)
+    // POST_SCHOOL: after 5pm, TRANSITION can't fire (next school >18h)
     // Warm message only, no emoji, no preview
     els.offdayEmoji.textContent = '';
     els.offdayMessage.textContent = "School\u2019s out for today.";
@@ -288,6 +299,31 @@ function renderNextSchoolPreview(nextSchool, muted) {
 
   if (nextSchool.spiritDress && nextSchool.spiritDress.length > 0) {
     html += `<div class="now-offday__preview-spirit">\uD83D\uDC55 Spirit Dress: ${nextSchool.spiritDress.join(', ')}</div>`;
+  }
+
+  preview.innerHTML = html;
+}
+
+function renderMarqueePreview(marqueeEvents) {
+  const preview = els.offdayPreview;
+  preview.hidden = false;
+  preview.classList.remove('now-offday__preview--muted');
+
+  const primary = marqueeEvents[0];
+  const others = marqueeEvents.slice(1);
+
+  const prefix = primary.home ? 'vs' : '@';
+  const timeStr = primary.time ? ` \u2014 ${formatTimeOfDay(primary.time)}` : '';
+
+  let html = `<div class="now-offday__marquee-event">Varsity ${primary.sport} ${prefix} ${primary.opponent}${timeStr}</div>`;
+
+  if (others.length > 0) {
+    html += `<div class="now-offday__marquee-also">Also tonight:</div>`;
+    for (const event of others) {
+      const evPrefix = event.home ? 'vs' : '@';
+      const evTime = event.time ? ` \u2014 ${formatTimeOfDay(event.time)}` : '';
+      html += `<div class="now-offday__marquee-event now-offday__marquee-event--secondary">${event.emoji} Varsity ${event.sport} ${evPrefix} ${event.opponent}${evTime}</div>`;
+    }
   }
 
   preview.innerHTML = html;
