@@ -165,7 +165,8 @@ function renderValidity(resolved, payload, nowState) {
       el.classList.add('is-visible', 'is-assumed');
       els.validityIcon.textContent = '?';
       els.validityTitle.textContent = 'Schedule assumed';
-      els.validityDetail.textContent = 'No matching event for today \u2014 confirm with your teacher.';
+      els.validityDetail.innerHTML =
+        'No matching event for today \u2014 check <a href="https://materdei.org" target="_blank" rel="noopener">materdei.org</a> for details.';
       return;
 
     case 'offline':
@@ -346,6 +347,10 @@ function renderBlocks(template, personal, activeBlocks) {
       metaDiv.textContent = parts.join(' \u00B7 ');
       infoDiv.appendChild(nameDiv);
       infoDiv.appendChild(metaDiv);
+    } else if (/check with your teacher/i.test(block.block_name)) {
+      // Fallback template — link to official calendar instead
+      nameDiv.innerHTML = 'Special Schedule \u2014 see <a href="https://materdei.org" target="_blank" rel="noopener">materdei.org</a> for details';
+      infoDiv.appendChild(nameDiv);
     } else {
       // Default: block name only
       nameDiv.textContent = block.block_name;
