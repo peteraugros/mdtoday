@@ -513,6 +513,7 @@ mdtoday/
 │   ├── resolve.js          ← The resolution pipeline (date → template + announcement + trust state)
 │   ├── schedule.js         ← Current period / next period logic
 │   ├── countdown.js        ← Tick timer for Now view (temporal layer only)
+│   ├── format.js           ← Shared schedule formatting (formatBlockLine, extractActiveBlocks)
 │   ├── app.js              ← Now view entry point (render orchestration, tick wiring)
 │   ├── schedule-view.js    ← Schedule view entry point (static render, no tick)
 │   └── daysoff-view.js     ← Days Off view entry point (static list, grouping logic)
@@ -1140,6 +1141,69 @@ Config tab gids are wired into `js/pass-data.js` (lines ~16-21). All Sheet CSV f
 - **Baseball and softball have no online rosters.** The athletics site roster pages are empty for these sports — the coaches haven't entered data into HomeCampus. The `manual_rosters` Sheet tab exists and the code reads from it, but it needs to be populated with player names from the coaches.
 - **10 sports total have no roster pages** on the athletics site: Baseball, Softball, Track & Field, Volleyball (Boys), Swimming, Tennis, Golf, Lacrosse, Water Polo, Wrestling. All require manual entry in the Sheet's `manual_rosters` tab for roster-based dismissal.
 
+### Session 2026-04-25: Schedule format unification, evening state machine, Friday marquee
+
+**Schedule format unification — single source of truth:**
+- Created `js/format.js` with `formatBlockLine()` and `extractActiveBlocks()` — all three schedule surfaces (Now view, TRANSITION card, Upcoming detail) now import from this single module.
+- **Monday label:** `"Monday Red"` → `"Homeroom Day — Red Day"` / `"Homeroom Day — Gray Day"` — communicates homeroom schedule, uses "Day" suffix consistently.
+- **Block numbers:** removed parenthetical format everywhere. Blocks render on their own line as plain text: `"Blocks 1, 3, 5, 7"` not `"(Blocks 1, 3, 5, 7)"`. Added `#day-blocks` element to `index.html` and `#detail-day-blocks` to `upcoming.html`.
+- **Next Up card:** dropped redundant day-of-week prefix (date already in header). Removed `PREVIEW_DATE_FMT` and `enhanceDayLabel` (dead code).
+- **Upcoming detail:** was `"MONDAY, APRIL 27 — HOMEROOM — RED DAY (BLOCKS 1, 3, 5, 7)"` — now matches the TRANSITION card format exactly.
+
+**"Check with your teacher" → materdei.org:**
+- All doubt-state messages now point to materdei.org instead of telling students to ask a teacher. Applied to: fallback template block name (Now + Schedule + Upcoming views), assumed-state validity banner (Now + Schedule views), Schedule view empty state.
+- Fallback block detection uses `/check with your teacher/i` regex against the sheet's `block_name` and renders a clickable link to `materdei.org`.
+
+**Vertical centering fix for minimal offday states:**
+- Empty `<ul class="now-blocks">` was still a flex child in offday mode, creating phantom gap space above the centered content. Fixed by adding `els.blocksList.hidden = true` in `renderOffday` and `els.blocksList.hidden = false` in `showSchoolDay`.
+
+**Weeknight TRANSITION (Mon-Thu):**
+- New Trigger 2 in `resolveNowState`: `base == SCHOOL_DAY AND hour >= 17 AND not Friday AND nextSchoolDay within 18h` → fires TRANSITION override. Shows tomorrow's schedule preview using the same render path as the existing Sunday-evening TRANSITION.
+- `POST_SCHOOL` override: fires when Mon-Thu after 5pm but next school day is >18h away (e.g., Tuesday before a Wednesday holiday). Renders "School's out for today." with no stale blocks, no emoji.
+- `tickTemporal` auto-detects the 5pm crossing and re-renders.
+- `STATE_COPY` expanded with `SCHOOL_DAY: { emoji: null, message: "School's out for today." }` — used as demoted text when SCHOOL_DAY + TRANSITION.
+- `renderStable` condition changed: enters offday path when `base !== 'SCHOOL_DAY' || override` (previously only `base !== 'SCHOOL_DAY'`).
+
+**Friday evening WEEKEND + marquee sports framing:**
+- Friday after final bell (not 5pm) switches from SCHOOL_DAY to WEEKEND base immediately. The finished-block view doesn't persist on Fridays — students are mentally in weekend mode at the final bell.
+- `getFinalBellMinutes(data, date)` derives final bell time from the last block's `end_time` in today's resolved template. Used only for Friday; Mon-Thu uses 5pm.
+- **Marquee event detection** (`MARQUEE_SPORTS` map in resolve.js): detects Big Five varsity sports — Football (🏈), Baseball (⚾), Softball (🥎), Basketball (🏀), Soccer (⚽), Lacrosse (🥍). Only varsity (`^V\s` prefix). Parses opponent, home/away, game time from iCal SUMMARY.
+- `getMarqueeEvents(data, date)` returns marquee events sorted by start time descending (latest = primary at index 0).
+- `MARQUEE_NIGHT` override: when Friday evening has Big Five sports, renders sport emoji + "Tonight at Mater Dei" as Tier 1, event details in card, "Enjoy your weekend." demoted to Tier 2. Multiple events stack with "Also tonight:" header.
+- Friday with no marquee events: renders standard WEEKEND ("Enjoy your weekend.").
+- **Tier B (drama, dances) deferred** — data pipeline doesn't support drama/dance event tagging yet. Ship Tier A (sports) only.
+- **LIVE_EVENT deferred** — not implemented in v1. The spec defines it but it requires infrastructure not yet built.
+- CSS added: `.now-offday__marquee-event`, `.now-offday__marquee-event--secondary`, `.now-offday__marquee-also`.
+
+**Evening state machine summary (all cases):**
+
+| Day | Time | Base | Override | Render |
+|---|---|---|---|---|
+| Any weekday | During school | SCHOOL_DAY | none | Normal schedule + countdown |
+| Any weekday | After bell, marquee tonight | SCHOOL_DAY (Fri: WEEKEND) | MARQUEE_NIGHT | "Tonight at Mater Dei" + game |
+| Mon-Thu | After bell, no marquee, before 5pm | SCHOOL_DAY | none | Dimmed blocks + "School day complete" |
+| Mon-Thu | After 5pm, no marquee, next school ≤18h | SCHOOL_DAY | TRANSITION | Tomorrow's schedule preview |
+| Mon-Thu | After 5pm, no marquee, next school >18h | SCHOOL_DAY | POST_SCHOOL | "School's out for today." |
+| Friday | After bell, no marquee, before 5pm | SCHOOL_DAY | none | Dimmed blocks + "School day complete" |
+| Friday | After 5pm, no marquee | WEEKEND | none | "Enjoy your weekend." |
+| Saturday/Sunday | Any | WEEKEND | none / TRANSITION | Weekend warm message / Sunday transition |
+
+**Universal marquee (generalized from Friday-only):**
+- Marquee events (Big Six varsity sports) now fire at final bell on **any weekday**, not just Friday. The day-of-week only determines the no-marquee fallback message.
+- **Big Five → Big Six:** added Volleyball (boys/girls) with 🏐 emoji. Full list: Football (🏈), Baseball (⚾), Softball (🥎), Basketball (🏀), Soccer (⚽), Lacrosse (🥍), Volleyball (🏐).
+- **Time-of-day emoji for weeknight TRANSITION:** ☀️ before 7pm, 🌙 after 7pm. Only applies to Mon-Thu TRANSITION; Sunday/holiday-eve TRANSITION keeps 🌙. Marquee events keep their sport emoji regardless of time.
+- **MARQUEE_NIGHT demoted text is day-appropriate:** Mon-Thu → "Getting ready for tomorrow"; Friday → "Enjoy your weekend."
+- **tickTemporal auto-detect:** checks at final bell for marquee, re-checks at 5pm for no-marquee fallback. Only commits the state change when `resolveNowState` actually produces a new override — avoids the one-shot flag problem where checking at bell would prevent the 5pm check.
+- **Tier B (drama, dances) deferred** — data pipeline doesn't support these event types yet. Ship Tier A (sports) only.
+
+**Cache version:** `v2.4.0` (bumped from `v2.2.0` during this session).
+
+**Known decisions from this session:**
+- **"Check with your teacher" is never acceptable copy.** All doubt states point to materdei.org. This applies to fallback blocks, assumed-state banners, and empty states. The fallback template in the Google Sheet still says "check with your teacher" — the override is in the rendering code via regex detection.
+- **Block numbers are information, not code.** No parentheses, own line, plain text. This is a design rule, not a code rule — applies to all surfaces.
+- **Monday is the only homeroom day.** Only Monday gets the "Homeroom Day —" prefix. If Mater Dei ever adds homeroom to other days, this becomes a resolver convention change.
+- **Marquee is universal across weekdays.** Tuesday basketball gets the same "Tonight at Mater Dei" prominence as Friday football. The day-of-week only affects the no-marquee fallback.
+
 ---
 
 ## Working Rules (inherited from Day & Knight, adapted)
@@ -1165,6 +1229,9 @@ Config tab gids are wired into `js/pass-data.js` (lines ~16-21). All Sheet CSV f
 20. **Friday never has office hours.** The resolver filters these out automatically. If this changes, remove the Friday filter in `resolve.js`.
 21. **Google Sheet must be both "Published to web" AND shared as "Anyone with the link."** These are separate permissions. Missing either one breaks the CSV fetch — Published-but-Restricted returns a 302 to Google login.
 18. **The `hidden` attribute pattern is unreliable when CSS sets `display`.** Prefer `style.display` toggling for any element that has an explicit `display` value in CSS. The `hidden` attribute works fine for elements with no CSS display override. Empty stub files are common in early-phase scaffolding (this has happened at least twice — `countdown.js` before Phase 2's correction, `sw.js` + `manifest.json` before Phase 4). Before any phase that introduces new files, run `ls -la` or `git ls-files` + `wc -l` on each named target. "Create X" in the spec means "fill X," not "assume X doesn't exist." The consequence of assuming wrong is overwriting real work with no recovery path.
+22. **Schedule format is a single source of truth.** `js/format.js` owns `formatBlockLine()` and `extractActiveBlocks()`. All surfaces that render schedule labels (Now view, TRANSITION card, Upcoming detail) import from `format.js`. Never inline block-number parsing in a view module.
+23. **Never say "check with your teacher."** All doubt-state messages point to `materdei.org` with a clickable link. This applies to fallback blocks, assumed-state banners, and empty states across all views.
+24. **Friday evening fires at final bell, Mon-Thu at 5pm.** Friday switches to WEEKEND immediately after the last block ends (derived from schedule data). Mon-Thu keeps the "School day complete" view until 5pm. These are different thresholds by design — Friday afternoon is culturally the start of the weekend.
 
 ---
 
