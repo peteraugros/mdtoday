@@ -239,25 +239,34 @@ function renderOffday(nowState, date) {
 
   if (nowState.override === 'TRANSITION') {
     // TRANSITION: tomorrow preview is tier1, base warm message demotes to tier2
-    const copy = STATE_COPY.TRANSITION;
-    const baseCopy = STATE_COPY[nowState.base];
-    els.offdayEmoji.textContent = copy.emoji;
-    els.offdayMessage.textContent = copy.message;
+    // Weeknight Mon-Thu: time-of-day emoji (☀️ before 7pm, 🌙 after)
+    // Non-school-day bases (Sunday, holiday-eve): always 🌙
+    const isWeeknight = nowState.base === 'SCHOOL_DAY';
+    const emoji = isWeeknight && date.getHours() < 19
+      ? '\u2600\uFE0F'   // ☀️
+      : '\uD83C\uDF19';  // 🌙
+    els.offdayEmoji.textContent = emoji;
+    els.offdayMessage.textContent = STATE_COPY.TRANSITION.message;
 
     renderNextSchoolPreview(nowState.nextSchoolDay, false);
 
+    const baseCopy = STATE_COPY[nowState.base];
     els.offdayDemoted.textContent = baseCopy.message;
     els.offdayDemoted.hidden = false;
     hasContentBelow = true;
   } else if (nowState.override === 'MARQUEE_NIGHT') {
-    // Friday evening marquee — Big Five varsity sports
+    // Big Six varsity sports — any weekday evening
     const primary = nowState.marqueeEvents[0];
     els.offdayEmoji.textContent = primary.emoji;
     els.offdayMessage.textContent = 'Tonight at Mater Dei';
 
     renderMarqueePreview(nowState.marqueeEvents);
 
-    els.offdayDemoted.textContent = 'Enjoy your weekend.';
+    // Day-appropriate demoted text
+    const isFriday = date.getDay() === 5;
+    els.offdayDemoted.textContent = isFriday
+      ? 'Enjoy your weekend.'
+      : 'Getting ready for tomorrow';
     els.offdayDemoted.hidden = false;
     hasContentBelow = true;
   } else if (nowState.override === 'POST_SCHOOL') {
@@ -429,22 +438,25 @@ function tickTemporal(now) {
   }
 
   // Auto-detect evening state change on school days:
-  // Friday → at final bell (immediate WEEKEND); Mon-Thu → at 5pm
+  // Check at final bell (marquee can fire) and at 5pm (no-marquee fallback).
+  // Re-resolve and only commit if the state actually changed.
   if (!transitionChecked && currentNowState && currentNowState.base === 'SCHOOL_DAY'
       && !currentNowState.override) {
-    const isFriday = now.getDay() === 5;
-    let shouldTransition = false;
-    if (isFriday && currentResolved.template) {
-      const finalBell = getLastBlockEndMinutes(currentResolved.template);
-      const nowMin = now.getHours() * 60 + now.getMinutes();
-      shouldTransition = finalBell && nowMin >= finalBell;
-    } else {
-      shouldTransition = now.getHours() >= 17;
-    }
-    if (shouldTransition) {
-      transitionChecked = true;
-      renderStable(now);
-      return;
+    const nowMin = now.getHours() * 60 + now.getMinutes();
+    const finalBell = currentResolved.template
+      ? getLastBlockEndMinutes(currentResolved.template) : null;
+    const pastBell = finalBell && nowMin >= finalBell;
+    const past5pm = now.getHours() >= 17;
+    if (pastBell || past5pm) {
+      // Re-resolve to see if state changed
+      const fresh = resolveNowState(currentPayload, now);
+      if (fresh.override || fresh.base !== 'SCHOOL_DAY') {
+        transitionChecked = true;
+        renderStable(now);
+        return;
+      }
+      // No state change yet (e.g., past bell but no marquee, not yet 5pm)
+      if (past5pm) transitionChecked = true; // stop checking after 5pm
     }
   }
 
