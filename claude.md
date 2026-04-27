@@ -516,7 +516,8 @@ mdtoday/
 │   ├── format.js           ← Shared schedule formatting (formatBlockLine, extractActiveBlocks)
 │   ├── app.js              ← Now view entry point (render orchestration, tick wiring)
 │   ├── schedule-view.js    ← Schedule view entry point (static render, no tick)
-│   └── daysoff-view.js     ← Days Off view entry point (static list, grouping logic)
+│   ├── daysoff-view.js     ← Days Off view entry point (static list, grouping logic)
+│   └── install-prompt.js   ← PWA install overlay for iOS Safari (iPad/iPhone detection, session + cooldown dismiss)
 ├── sw.js                   ← Service worker (cache strategy)
 ├── manifest.json           ← PWA manifest (icons, theme color, name)
 ├── icons/
@@ -1203,6 +1204,34 @@ Config tab gids are wired into `js/pass-data.js` (lines ~16-21). All Sheet CSV f
 - **Block numbers are information, not code.** No parentheses, own line, plain text. This is a design rule, not a code rule — applies to all surfaces.
 - **Monday is the only homeroom day.** Only Monday gets the "Homeroom Day —" prefix. If Mater Dei ever adds homeroom to other days, this becomes a resolver convention change.
 - **Marquee is universal across weekdays.** Tuesday basketball gets the same "Tonight at Mater Dei" prominence as Friday football. The day-of-week only affects the no-marquee fallback.
+
+### Session 2026-04-26: PWA install prompt overlay + install funnel analytics
+
+**Install prompt overlay (`js/install-prompt.js`) — new file:**
+- Full-screen red overlay for iPad/iPhone Safari users who haven't installed the PWA yet. Shows step-by-step instructions (tap Share → Add to Home Screen) with device-appropriate wording (iPhone: "at the bottom of Safari", iPad: "at the top of Safari").
+- **5-second delay** after page load before overlay appears. Lets the student see the Now view first, so the prompt feels like an offer rather than a gate. Standalone/iOS/Safari detection runs immediately (no wasted timer for non-eligible users); only the session/cooldown checks and overlay build are delayed.
+- **iPhone-first detection order.** `isIPhone` is checked before `isIPad` with a `!isIPhone` guard in the iPad fallback (`Mac` + `maxTouchPoints > 1`). Without this guard, iPhones were misclassified as iPads because both have `maxTouchPoints > 1` in some Safari configurations.
+- **Two-button dismiss model:**
+  - **"I'll do it now"** (primary, white pill button with red text) — sets `sessionStorage` flag, overlay won't reappear until the Safari tab/window is closed and reopened. Does NOT fire the `install-prompt-dismissed` analytics event (student is committing to install, not opting out).
+  - **"Skip for now"** (secondary, small underlined text link) — sets a 1-hour `localStorage` cooldown. Fires `install-prompt-dismissed` event.
+- **Loaded via `<script src="./js/install-prompt.js" defer>` in `index.html` only.** Not a module — plain IIFE. Not added to service worker precache (it's a non-critical enhancement; if it fails to load, the student just doesn't see the prompt).
+
+**Install funnel analytics (inline in `index.html`) — Changes A + B:**
+- `window.mdTrackEvent(name)` helper fires events to GoatCounter (`mdtoday.goatcounter.com`). Skips localhost. Retries once after 500ms if GoatCounter script hasn't loaded yet.
+- **Events tracked:**
+  - `install-prompt-shown` — overlay appeared (fired by `install-prompt.js`)
+  - `install-prompt-dismissed` — "Skip for now" tapped (fired by `install-prompt.js`)
+  - `standalone-launch` — PWA opened from home screen (fired every launch)
+  - `install-prompt-completed` — first-ever standalone launch on this device (fired once via `localStorage` flag)
+- Standalone detection runs immediately on page load (before the 5-second overlay delay) so installed users are tracked even though they never see the prompt.
+
+**No cache version bump this session.** `install-prompt.js` is not in the SW precache list — it's a non-critical script that loads from network. No changes to `sw.js`.
+
+**Known decisions from this session:**
+- **Install prompt only on `index.html`.** The Now view is where students land; showing the prompt on Schedule or Days Off would be surprising. If a student deep-links to another view, they'll see the prompt next time they visit the Now view.
+- **CSS class names and sessionStorage key kept as `got-it` internally.** The user-facing text was renamed from "Got it" to "I'll do it now" but internal identifiers (`md-install-overlay__got-it`, `md_today_got_it_session`) were not renamed — avoids breaking session continuity for users mid-test and is unnecessary churn.
+- **`&rsquo;` for the curly apostrophe in "I'll do it now."** Typographically correct and matches Apple's convention.
+- **Non-Safari iOS browsers are excluded.** Chrome iOS (`CriOS`), Firefox iOS (`FxiOS`), Instagram, Snapchat, etc. are filtered out because they can't add to home screen — showing the prompt would be misleading.
 
 ---
 
