@@ -29,58 +29,55 @@ const STALE_THRESHOLD_MS = 36 * 60 * 60 * 1000; // 36 hours
 // Build by grepping: grep "SUMMARY:" calendar.ics | sort -u
 // Only sports with possible dismissals need mapping.
 
+// Prefix format matches the iCal feed: "V Boys Basketball", "V Girls Soccer", etc.
+// Verified against live feed 2026-04-27.
 const SUMMARY_TO_SLUG = {
+  // Baseball / Softball / Football (no gender word in iCal)
   'V Baseball':                 'baseball',
-  'JV Red Baseball':            'baseball',
-  'JV Gray Baseball':           'baseball',
-  'FR Baseball':                'baseball',
-  'V Basketball, Boys':         'basketball-boys',
-  'JV Red Basketball, Boys':    'basketball-boys',
-  'JV Gray Basketball, Boys':   'basketball-boys',
-  'FR Basketball, Boys':        'basketball-boys',
-  'V Basketball, Girls':        'basketball-girls',
-  'JV Red Basketball, Girls':   'basketball-girls',
-  'JV Gray Basketball, Girls':  'basketball-girls',
-  'V Cross Country, Boys':      'cross-country-boys',
-  'V Cross Country, Girls':     'cross-country-girls',
-  'V Football':                 'football',
-  'JV Red Football':            'football',
-  'JV Gray Football':           'football',
-  'FR Football':                'football',
-  'V Golf, Boys':               'golf-boys',
-  'V Golf, Girls':              'golf-girls',
-  'V Lacrosse, Boys':           'lacrosse-boys',
-  'JV Red Lacrosse, Boys':      'lacrosse-boys',
-  'V Lacrosse, Girls':          'lacrosse-girls',
-  'JV Red Lacrosse, Girls':     'lacrosse-girls',
-  'V Soccer, Boys':             'soccer-boys',
-  'JV Red Soccer, Boys':        'soccer-boys',
-  'JV Gray Soccer, Boys':       'soccer-boys',
-  'V Soccer, Girls':            'soccer-girls',
-  'JV Red Soccer, Girls':       'soccer-girls',
-  'JV Gray Soccer, Girls':      'soccer-girls',
   'V Softball':                 'softball',
-  'JV Red Softball':            'softball',
-  'V Swimming, Boys':           'swimming-boys',
-  'V Swimming, Girls':          'swimming-girls',
-  'V Tennis, Boys':             'tennis-boys',
-  'V Tennis, Girls':            'tennis-girls',
-  'V Track & Field, Boys':      'track-field-boys',
-  'V Track & Field, Girls':     'track-field-girls',
-  'V Volleyball, Boys':         'volleyball-boys',
-  'JV Red Volleyball, Boys':    'volleyball-boys',
-  'V Volleyball, Girls':        'volleyball-girls',
-  'JV Red Volleyball, Girls':   'volleyball-girls',
-  'JV Gray Volleyball, Girls':  'volleyball-girls',
-  'V Water Polo, Boys':         'water-polo-boys',
-  'JV Red Water Polo, Boys':    'water-polo-boys',
-  'V Water Polo, Girls':        'water-polo-girls',
-  'JV Red Water Polo, Girls':   'water-polo-girls',
-  'V Wrestling':                'wrestling',
-  'V Beach Volleyball':         'beach-volleyball',
-  'V Flag Football':            'flag-football',
-  'V Competitive Cheer':        'competitive-cheer',
-  'V Boys Rugby':               'rugby',
+  'V Football':                 'football',
+  // Basketball
+  'V Boys Basketball':          'basketball-boys',
+  'V Girls Basketball':         'basketball-girls',
+  // Soccer
+  'V Boys Soccer':              'soccer-boys',
+  'V Girls Soccer':             'soccer-girls',
+  // Lacrosse
+  'V Boys Lacrosse':            'lacrosse-boys',
+  'V Girls Lacrosse':           'lacrosse-girls',
+  // Volleyball
+  'V Boys Volleyball':          'volleyball-boys',
+  'V Girls Volleyball':         'volleyball-girls',
+  // Water Polo
+  'V Boys Water Polo':          'water-polo-boys',
+  'V Girls Water Polo':         'water-polo-girls',
+  // Tennis
+  'V Boys Tennis':              'tennis-boys',
+  'V Girls Tennis':             'tennis-girls',
+  // Golf
+  'V Boys Golf':                'golf-boys',
+  'V Girls Golf':               'golf-girls',
+  // Swimming / Diving
+  'V Boys Swim':                'swimming-boys',
+  'V Girls Swim':               'swimming-girls',
+  'V Boys & Girls Swim':        'swimming-boys',
+  'V Boys & Girls Dive':        'swimming-boys',
+  'V Girls Dive':               'swimming-girls',
+  // Track & Field
+  'V Boys Track & Field':       'track-field-boys',
+  'V Girls Track & Field':      'track-field-girls',
+  'V Track & Field':            'track-field-boys',
+  // Cross Country
+  'V Cross Country':            'cross-country-boys',
+  'V Girls Cross Country':      'cross-country-girls',
+  // Wrestling
+  'V Boys Wrestling':           'wrestling',
+  'V Girls Wrestling':          'wrestling',
+  'V Boys & Girls Wrestling':   'wrestling',
+  // Beach Volleyball / Flag Football / Cheer
+  'V Girls Beach Volleyball':   'beach-volleyball',
+  'V Girls Flag Football':      'flag-football',
+  'V Cheer':                    'competitive-cheer',
 };
 
 // Reverse: extract level from iCal SUMMARY prefix
