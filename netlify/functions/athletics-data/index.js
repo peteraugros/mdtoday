@@ -286,57 +286,60 @@ const ICAL_URL = 'https://www.materdei.org/apps/events/ical/?id=33';
 
 // Maps iCal SUMMARY prefixes to athletics site slugs.
 // The core prefix (before @ or vs) determines the sport.
+// Prefix format matches the iCal feed: "V Boys Basketball", "V Girls Soccer", etc.
+// Verified against live feed 2026-04-27.
 const ICAL_PREFIX_TO_SLUG = {
+  // Baseball / Softball (no gender word in iCal)
   'V Baseball':                 'baseball',
-  'JV Red Baseball':            'baseball',
-  'JV Gray Baseball':           'baseball',
-  'FR Baseball':                'baseball',
-  'V Basketball, Boys':         'basketball-boys',
-  'JV Red Basketball, Boys':    'basketball-boys',
-  'JV Gray Basketball, Boys':   'basketball-boys',
-  'FR Basketball, Boys':        'basketball-boys',
-  'V Basketball, Girls':        'basketball-girls',
-  'JV Red Basketball, Girls':   'basketball-girls',
-  'JV Gray Basketball, Girls':  'basketball-girls',
-  'V Cross Country, Boys':      'cross-country-boys-2',
-  'V Cross Country, Girls':     'cross-country-boys-2',
-  'V Football':                 'football',
-  'JV Red Football':            'football',
-  'JV Gray Football':           'football',
-  'FR Football':                'football',
-  'V Golf, Boys':               'golf-boys',
-  'V Golf, Girls':              'golf-girls',
-  'V Lacrosse, Boys':           'lacrosse-boys-2',
-  'JV Red Lacrosse, Boys':      'lacrosse-boys-2',
-  'V Lacrosse, Girls':          'lacrosse-girls',
-  'JV Red Lacrosse, Girls':     'lacrosse-girls',
-  'V Soccer, Boys':             'soccer-boys',
-  'JV Red Soccer, Boys':        'soccer-boys',
-  'JV Gray Soccer, Boys':       'soccer-boys',
-  'V Soccer, Girls':            'soccer-girls',
-  'JV Red Soccer, Girls':       'soccer-girls',
-  'JV Gray Soccer, Girls':      'soccer-girls',
   'V Softball':                 'softball',
-  'JV Red Softball':            'softball',
-  'V Swimming, Boys':           'swimming-diving-boys-3',
-  'V Swimming, Girls':          'swimming-diving-girls',
-  'V Tennis, Boys':              'tennis-boys',
-  'V Tennis, Girls':             'tennis-girls',
-  'V Track & Field, Boys':      'track-field-boys-3',
-  'V Track & Field, Girls':     'track-field-boys-3',
-  'V Volleyball, Boys':         'volleyball-boys',
-  'JV Red Volleyball, Boys':    'volleyball-boys',
-  'V Volleyball, Girls':        'volleyball-girls',
-  'JV Red Volleyball, Girls':   'volleyball-girls',
-  'JV Gray Volleyball, Girls':  'volleyball-girls',
-  'V Water Polo, Boys':         'water-polo-boys',
-  'JV Red Water Polo, Boys':    'water-polo-boys',
-  'V Water Polo, Girls':        'water-polo-girls',
-  'JV Red Water Polo, Girls':   'water-polo-girls',
-  'V Wrestling':                'wrestling-boys',
-  'V Beach Volleyball':         'beach-volleyball-girls',
-  'V Flag Football':            'flag-football-girls',
-  'V Competitive Cheer':        'traditional-competitive-cheer',
+  // Football (no gender word in iCal)
+  'V Football':                 'football',
+  // Basketball
+  'V Boys Basketball':          'basketball-boys',
+  'V Girls Basketball':         'basketball-girls',
+  // Soccer
+  'V Boys Soccer':              'soccer-boys',
+  'V Girls Soccer':             'soccer-girls',
+  // Lacrosse
+  'V Boys Lacrosse':            'lacrosse-boys-2',
+  'V Girls Lacrosse':           'lacrosse-girls',
+  // Volleyball
+  'V Boys Volleyball':          'volleyball-boys',
+  'V Girls Volleyball':         'volleyball-girls',
+  // Water Polo
+  'V Boys Water Polo':          'water-polo-boys',
+  'V Girls Water Polo':         'water-polo-girls',
+  // Tennis
+  'V Boys Tennis':              'tennis-boys',
+  'V Girls Tennis':             'tennis-girls',
+  // Golf
+  'V Boys Golf':                'golf-boys',
+  'V Girls Golf':               'golf-girls',
+  // Swimming / Diving (iCal uses both "Boys Swim" and "Boys & Girls Swim")
+  'V Boys Swim':                'swimming-diving-boys-3',
+  'V Girls Swim':               'swimming-diving-girls',
+  'V Boys & Girls Swim':        'swimming-diving-boys-3',
+  'V Boys & Girls Dive':        'swimming-diving-boys-3',
+  'V Girls Dive':               'swimming-diving-girls',
+  // Track & Field (iCal uses both gendered and ungendered)
+  'V Boys Track & Field':       'track-field-boys-3',
+  'V Girls Track & Field':      'track-field-boys-3',
+  'V Track & Field':            'track-field-boys-3',
+  // Cross Country
+  'V Cross Country':            'cross-country-boys-2',
+  'V Girls Cross Country':      'cross-country-boys-2',
+  // Wrestling
+  'V Boys Wrestling':           'wrestling-boys',
+  'V Girls Wrestling':          'wrestling-boys',
+  'V Boys & Girls Wrestling':   'wrestling-boys',
+  // Beach Volleyball / Flag Football / Cheer
+  'V Girls Beach Volleyball':   'beach-volleyball-girls',
+  'V Girls Flag Football':      'flag-football-girls',
+  'V Cheer':                    'traditional-competitive-cheer',
+  // Niche sports (no athletics site page — slug may not exist, but map anyway)
+  'V Ice Hockey':               'ice-hockey',
+  'V Sailing':                  'sailing',
+  'V Surf':                     'surf',
 };
 
 function icalPrefixToSlug(summary) {
