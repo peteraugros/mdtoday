@@ -191,7 +191,52 @@
       });
     })();
   </script>
+  <script>
+    // MD Today — install funnel event tracking
+    // Fires to the student GoatCounter site (mdtoday.goatcounter.com).
+    // Skips localhost so dev hits don't pollute production data.
+    (function () {
+      var IS_LOCALHOST = location.hostname === 'localhost' ||
+                         location.hostname === '127.0.0.1' ||
+                         location.hostname === '';
+
+      // Public helper — used by install-prompt.js (Change B) and below.
+      window.mdTrackEvent = function (name) {
+        if (IS_LOCALHOST) return;
+        if (!window.goatcounter || typeof window.goatcounter.count !== 'function') {
+          // GoatCounter script hasn't loaded yet; retry once after a tick.
+          setTimeout(function () {
+            if (window.goatcounter && typeof window.goatcounter.count === 'function') {
+              window.goatcounter.count({ path: name, title: name, event: true });
+            }
+          }, 500);
+          return;
+        }
+        window.goatcounter.count({ path: name, title: name, event: true });
+      };
+
+      // Detect standalone launch (PWA opened from home screen, not Safari tab).
+      var isStandalone = window.matchMedia('(display-mode: standalone)').matches ||
+                         window.navigator.standalone === true;
+
+      if (isStandalone) {
+        // Fire on every standalone launch — engagement signal.
+        window.mdTrackEvent('standalone-launch');
+
+        // Fire once-ever per device — true install count.
+        try {
+          if (!localStorage.getItem('md_today_install_completed')) {
+            localStorage.setItem('md_today_install_completed', '1');
+            window.mdTrackEvent('install-prompt-completed');
+          }
+        } catch (e) {
+          // localStorage blocked (private browsing, etc.) — fail silent.
+        }
+      }
+    })();
+  </script>
   <script data-goatcounter="https://mdtoday.goatcounter.com/count"
           async src="//gc.zgo.at/count.js"></script>
+  <script src="./js/install-prompt.js" defer></script>
 </body>
 </html>
